@@ -1,28 +1,69 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <script src="https://code.createjs.com/easeljs-0.7.0.min.js"></script>
-    <script src="keyMaster.js"></script>
-    <script src="main.js"></script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Diamond Defender</title>
     <link href='https://fonts.googleapis.com/css?family=Hammersmith+One' rel='stylesheet' type='text/css'>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            overflow: hidden;
+            font-family: 'Hammersmith One', sans-serif;
+        }
+        
+        #canvas {
+            border: solid 1px #333;
+            cursor: none;
+            display: block;
+            max-width: 100vw;
+            max-height: 100vh;
+            width: auto;
+            height: auto;
+        }
+        
+        .game-container {
+            position: relative;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        
+        @media (max-width: 900px) {
+            body {
+                padding: 5px;
+            }
+            
+            #canvas {
+                border-width: 1px;
+            }
+        }
+        
+        @media (max-width: 600px) {
+            body {
+                padding: 2px;
+            }
+            
+            #canvas {
+                border: none;
+            }
+        }
+    </style>
 </head>
-<style>
-#canvas{
-  width: 90vw;
-  height: 90vh;
-  align-self: center;
-  border: solid 1px #333;
-  margin-left: 5vw;
-}
-
-</style>
-
-
-  <body onload="init();" style="background-color:#000;">
-    <div onmousedown="setMouse(true);" onmouseup="setMouse(false);" style="cursor: none;">
-      <canvas id="canvas" width="1400" height="800">
-          alternate content
-      </canvas>
+<body>
+    <div class="game-container">
+        <canvas id="canvas">
+            Your browser does not support the canvas element.
+        </canvas>
     </div>
-  </body>
+    <script type="module" src="/src/main.ts"></script>
+</body>
 </html>
