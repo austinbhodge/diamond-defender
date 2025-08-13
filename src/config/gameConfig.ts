@@ -16,8 +16,8 @@ export const gameConfig: GameConfig = {
     waveDisplay: { x: 2, y: 2.5, anchor: { x: 'left', y: 'top' } },
     enemyCounter: { x: 2, y: 6.25, anchor: { x: 'left', y: 'top' } },
     timerDisplay: { x: 50, y: 2.5, anchor: { x: 'center', y: 'top' } },
-    healthBar: { x: 50, y: 93.75, width: 28.57, height: 3.75 },
-    ammoBar: { x: 95, y: 50, width: 2.5, height: 30 }
+    healthBar: { x: 2, y: 95, width: 200, height: 10 },
+    ammoBar: { x: 98, y: 95, width: 200, height: 10 }
   },
   fps: 55,
   player: {
@@ -58,6 +58,15 @@ export const gameConfig: GameConfig = {
       ammoRegenRate: 2,
       ammoConsumption: 1,
       shotCooldown: 0.05
+    },
+    circle: {
+      limit: 50,
+      speed: -4,
+      maxAmmo: 100,
+      ammoRegenRate: 2,
+      ammoConsumption: 3,
+      shotCooldown: 0.15,
+      projectileSize: 8
     },
     kick: {
       maxRadius: 30,

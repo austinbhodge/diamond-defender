@@ -91,6 +91,14 @@ export class Player implements GameEntity {
   }
 
   public handleMovement(keys: Set<string>): void {
+    // Get actual canvas bounds from the stage
+    const canvas = this.stage.canvas as HTMLCanvasElement;
+    const playerRadius = 14; // Player shape radius
+    const minX = playerRadius;
+    const maxX = canvas.width - playerRadius;
+    const minY = playerRadius;
+    const maxY = canvas.height - playerRadius;
+    
     // Vertical movement
     if (keys.has('ArrowUp') || keys.has('KeyW') || keys.has('ArrowDown') || keys.has('KeyS')) {
       this.shape.filters = [this.blurFilterY];
@@ -139,6 +147,22 @@ export class Player implements GameEntity {
       }
     } else {
       this.velocity.x = 0;
+    }
+    
+    // Clamp position to canvas bounds
+    this.position.x = Math.max(minX, Math.min(maxX, this.position.x));
+    this.position.y = Math.max(minY, Math.min(maxY, this.position.y));
+    
+    // Stop velocity only in the direction of the boundary hit
+    if ((this.position.x <= minX && this.negDirection.x < 0) || 
+        (this.position.x >= maxX && this.negDirection.x > 0)) {
+      this.velocity.x = 0;
+      this.acceleration.x = gameConfig.player.acceleration;
+    }
+    if ((this.position.y <= minY && this.negDirection.y < 0) || 
+        (this.position.y >= maxY && this.negDirection.y > 0)) {
+      this.velocity.y = 0;
+      this.acceleration.y = gameConfig.player.acceleration;
     }
   }
 

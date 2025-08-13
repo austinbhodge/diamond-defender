@@ -22,7 +22,8 @@ export interface GameEntity extends GameObject {
 
 export enum WeaponType {
   LASER = 'laser',
-  DUB = 'dub'
+  DUB = 'dub',
+  CIRCLE = 'circle'
 }
 
 export enum EnemyAttackPattern {
@@ -99,6 +100,15 @@ export interface GameConfig {
       ammoRegenRate: number;
       ammoConsumption: number;
       shotCooldown: number;
+    };
+    circle: {
+      limit: number;
+      speed: number;
+      maxAmmo: number;
+      ammoRegenRate: number;
+      ammoConsumption: number;
+      shotCooldown: number;
+      projectileSize: number;
     };
     kick: {
       maxRadius: number;

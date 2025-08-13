@@ -21,14 +21,20 @@ export class Phaser implements GameObject {
   private speed: number;
   private firing: boolean = false;
   
-  // Ammo system
-  private currentAmmo: number;
-  private maxAmmo: number;
-  private ammoRegenRate: number;
-  private ammoConsumption: number;
-  private shotCooldown: number;
-  private lastShotTime: number = 0;
-  private ammoRegenTimer: number = 0;
+  // Ammo system - separate for each weapon type
+  private weaponAmmo: Map<WeaponType, { current: number; max: number; regenTimer: number; }> = new Map();
+  private lastShotTime: Map<WeaponType, number> = new Map();
+  
+  // Weapon configs
+  private weaponConfigs: Map<WeaponType, {
+    limit: number;
+    speed: number;
+    maxAmmo: number;
+    ammoRegenRate: number;
+    ammoConsumption: number;
+    shotCooldown: number;
+    projectileSize?: number;
+  }> = new Map();
   
   // Dub cannon specific
   private cycle: number = 0;
@@ -41,19 +47,58 @@ export class Phaser implements GameObject {
   private blurX: createjs.BlurFilter;
   private blurY: createjs.BlurFilter;
   private superBlur: createjs.BlurFilter;
+  
+  // Beam connector for circle weapon
+  private beamConnector: createjs.Shape;
 
   constructor(stage: createjs.Stage, type: WeaponType = WeaponType.LASER) {
     this.stage = stage;
     this.type = type;
     
-    const { phaser } = gameConfig.weapons;
+    const { phaser, circle } = gameConfig.weapons;
+    
+    // Initialize weapon configs
+    this.weaponConfigs.set(WeaponType.LASER, {
+      limit: phaser.limit,
+      speed: phaser.speed,
+      maxAmmo: phaser.maxAmmo,
+      ammoRegenRate: phaser.ammoRegenRate,
+      ammoConsumption: phaser.ammoConsumption,
+      shotCooldown: phaser.shotCooldown
+    });
+    
+    this.weaponConfigs.set(WeaponType.DUB, {
+      limit: phaser.limit,
+      speed: phaser.speed,
+      maxAmmo: phaser.maxAmmo,
+      ammoRegenRate: phaser.ammoRegenRate,
+      ammoConsumption: phaser.ammoConsumption * 2, // Dub uses more ammo
+      shotCooldown: phaser.shotCooldown
+    });
+    
+    this.weaponConfigs.set(WeaponType.CIRCLE, {
+      limit: circle.limit,
+      speed: circle.speed,
+      maxAmmo: circle.maxAmmo,
+      ammoRegenRate: circle.ammoRegenRate,
+      ammoConsumption: circle.ammoConsumption,
+      shotCooldown: circle.shotCooldown,
+      projectileSize: circle.projectileSize
+    });
+    
+    // Initialize ammo for each weapon type
+    for (const [weaponType, config] of this.weaponConfigs.entries()) {
+      this.weaponAmmo.set(weaponType, {
+        current: config.maxAmmo,
+        max: config.maxAmmo,
+        regenTimer: 0
+      });
+      this.lastShotTime.set(weaponType, 0);
+    }
+    
+    // Set compatibility variables for legacy code
     this.limit = phaser.limit;
     this.speed = phaser.speed;
-    this.maxAmmo = phaser.maxAmmo;
-    this.currentAmmo = this.maxAmmo; // Start with full ammo
-    this.ammoRegenRate = phaser.ammoRegenRate;
-    this.ammoConsumption = phaser.ammoConsumption;
-    this.shotCooldown = phaser.shotCooldown;
     
     this.playerPosition = { x: 0, y: 0 };
     this.mousePosition = { x: 0, y: 0 };
@@ -62,6 +107,10 @@ export class Phaser implements GameObject {
     this.blurX = new createjs.BlurFilter(5, 0, 1);
     this.blurY = new createjs.BlurFilter(0, 5, 1);
     this.superBlur = new createjs.BlurFilter(10, 10, 1);
+    
+    // Create beam connector shape for circle weapon
+    this.beamConnector = new createjs.Shape();
+    this.stage.addChild(this.beamConnector);
   }
 
   public update(): void {
@@ -90,11 +139,15 @@ export class Phaser implements GameObject {
       this.createLaserProjectile();
     } else if (this.type === WeaponType.DUB) {
       this.createDubProjectile();
+    } else if (this.type === WeaponType.CIRCLE) {
+      this.createCircleProjectile();
     }
     
-    // Consume ammo and update shot timing
-    this.currentAmmo = Math.max(0, this.currentAmmo - this.ammoConsumption);
-    this.lastShotTime = Date.now() / 1000; // Convert to seconds
+    // Consume ammo for current weapon
+    const config = this.weaponConfigs.get(this.type)!;
+    const ammo = this.weaponAmmo.get(this.type)!;
+    ammo.current = Math.max(0, ammo.current - config.ammoConsumption);
+    this.lastShotTime.set(this.type, Date.now() / 1000);
   }
 
   private createLaserProjectile(): void {
@@ -172,10 +225,41 @@ export class Phaser implements GameObject {
     this.flip *= -1;
   }
 
+  private createCircleProjectile(): void {
+    const config = this.weaponConfigs.get(WeaponType.CIRCLE)!;
+    const shape = new createjs.Shape();
+    shape.graphics
+      .beginFill("rgb(138, 43, 226)") // Purple color
+      .drawCircle(0, 0, config.projectileSize!);
+    
+    shape.x = this.playerPosition.x;
+    shape.y = this.playerPosition.y;
+    shape.alpha = 0.9;
+    
+    this.stage.addChild(shape);
+    
+    const angleRad = degreesToRadians(this.angle + 270);
+    const projectile: Projectile = {
+      shape,
+      rotation: this.angle,
+      alpha: 0.9,
+      velocityX: Math.cos(angleRad) * config.speed,
+      velocityY: Math.sin(angleRad) * config.speed
+    };
+    
+    this.projectiles.push(projectile);
+  }
+
   private updateProjectiles(): void {
     if (this.type === WeaponType.DUB) {
       this.updateDubCycle();
     }
+    
+    // Clear beam connector at the start of each frame
+    this.beamConnector.graphics.clear();
+    
+    // Collect circle projectiles for beam drawing
+    const circleProjectiles: Projectile[] = [];
     
     for (let i = this.projectiles.length - 1; i >= 0; i--) {
       const projectile = this.projectiles[i];
@@ -193,14 +277,23 @@ export class Phaser implements GameObject {
         }
       }
       
-      // Fade out
-      projectile.shape.alpha -= this.type === WeaponType.LASER ? 0.015 : 0.02;
+      // Fade out (slower for circles)
+      const fadeRate = this.type === WeaponType.CIRCLE ? 0.005 : (this.type === WeaponType.LASER ? 0.015 : 0.02);
+      projectile.shape.alpha -= fadeRate;
       
       // Remove if out of bounds or faded
       if (this.isProjectileOutOfBounds(projectile.shape) || projectile.shape.alpha <= 0) {
         this.stage.removeChild(projectile.shape);
         this.projectiles.splice(i, 1);
+      } else if (this.type === WeaponType.CIRCLE) {
+        // Collect circle projectiles that are still active
+        circleProjectiles.push(projectile);
       }
+    }
+    
+    // Draw beam connections for circle weapon
+    if (this.type === WeaponType.CIRCLE && circleProjectiles.length > 1) {
+      this.drawBeamConnections(circleProjectiles);
     }
   }
 
@@ -256,37 +349,110 @@ export class Phaser implements GameObject {
   private updateAmmo(): void {
     const deltaTime = 1 / gameConfig.fps; // Frame time in seconds
     
-    // Regenerate ammo over time
-    if (this.currentAmmo < this.maxAmmo) {
-      this.ammoRegenTimer += deltaTime;
-      const ammoToRegen = this.ammoRegenTimer * this.ammoRegenRate;
+    // Regenerate ammo for all weapon types
+    for (const [weaponType, config] of this.weaponConfigs.entries()) {
+      const ammo = this.weaponAmmo.get(weaponType)!;
       
-      if (ammoToRegen >= 1) {
-        const ammoGained = Math.floor(ammoToRegen);
-        this.currentAmmo = Math.min(this.maxAmmo, this.currentAmmo + ammoGained);
-        this.ammoRegenTimer = ammoToRegen - ammoGained; // Keep fractional part
+      if (ammo.current < ammo.max) {
+        ammo.regenTimer += deltaTime;
+        const ammoToRegen = ammo.regenTimer * config.ammoRegenRate;
+        
+        if (ammoToRegen >= 1) {
+          const ammoGained = Math.floor(ammoToRegen);
+          ammo.current = Math.min(ammo.max, ammo.current + ammoGained);
+          ammo.regenTimer = ammoToRegen - ammoGained; // Keep fractional part
+        }
+      } else {
+        ammo.regenTimer = 0; // Reset timer when full
       }
     }
   }
 
   private canFire(): boolean {
     const currentTime = Date.now() / 1000;
-    const hasAmmo = this.currentAmmo >= this.ammoConsumption;
-    const cooldownReady = (currentTime - this.lastShotTime) >= this.shotCooldown;
-    const hasProjectileSpace = this.projectiles.length < this.limit;
+    const config = this.weaponConfigs.get(this.type)!;
+    const ammo = this.weaponAmmo.get(this.type)!;
+    const lastShot = this.lastShotTime.get(this.type) || 0;
+    
+    const hasAmmo = ammo.current >= config.ammoConsumption;
+    const cooldownReady = (currentTime - lastShot) >= config.shotCooldown;
+    const hasProjectileSpace = this.projectiles.length < config.limit;
     
     return hasAmmo && cooldownReady && hasProjectileSpace;
   }
 
   public getCurrentAmmo(): number {
-    return this.currentAmmo;
+    const ammo = this.weaponAmmo.get(this.type)!;
+    return ammo.current;
   }
 
   public getMaxAmmo(): number {
-    return this.maxAmmo;
+    const ammo = this.weaponAmmo.get(this.type)!;
+    return ammo.max;
   }
 
   public getAmmoPercentage(): number {
-    return this.currentAmmo / this.maxAmmo;
+    const ammo = this.weaponAmmo.get(this.type)!;
+    return ammo.current / ammo.max;
+  }
+  
+  public getType(): WeaponType {
+    return this.type;
+  }
+  
+  private drawBeamConnections(circleProjectiles: Projectile[]): void {
+    // Sort projectiles by distance from player (closest first)
+    const sortedProjectiles = circleProjectiles.sort((a, b) => {
+      const distA = Math.sqrt(
+        Math.pow(a.shape.x - this.playerPosition.x, 2) + 
+        Math.pow(a.shape.y - this.playerPosition.y, 2)
+      );
+      const distB = Math.sqrt(
+        Math.pow(b.shape.x - this.playerPosition.x, 2) + 
+        Math.pow(b.shape.y - this.playerPosition.y, 2)
+      );
+      return distA - distB;
+    });
+    
+    // Draw connections between consecutive projectiles
+    this.beamConnector.graphics.setStrokeStyle(12, 'round', 'round');
+    
+    for (let i = 0; i < sortedProjectiles.length - 1; i++) {
+      const current = sortedProjectiles[i];
+      const next = sortedProjectiles[i + 1];
+      
+      // Calculate distance between projectiles
+      const dx = next.shape.x - current.shape.x;
+      const dy = next.shape.y - current.shape.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      // Only connect if within 60 pixels
+      if (distance <= 60) {
+        // Calculate alpha based on the average of the two projectiles
+        const avgAlpha = (current.shape.alpha + next.shape.alpha) / 2 * 0.7;
+        
+        // Draw the beam segment
+        this.beamConnector.graphics
+          .beginStroke(`rgba(138, 43, 226, ${avgAlpha})`)
+          .moveTo(current.shape.x, current.shape.y)
+          .lineTo(next.shape.x, next.shape.y);
+      }
+    }
+    
+    // Optional: Connect first projectile to player
+    if (sortedProjectiles.length > 0) {
+      const first = sortedProjectiles[0];
+      const dx = first.shape.x - this.playerPosition.x;
+      const dy = first.shape.y - this.playerPosition.y;
+      const distToPlayer = Math.sqrt(dx * dx + dy * dy);
+      
+      // Only connect if within 25 pixels of player
+      if (distToPlayer <= 25) {
+        this.beamConnector.graphics
+          .beginStroke(`rgba(138, 43, 226, ${first.shape.alpha * 0.5})`)
+          .moveTo(this.playerPosition.x, this.playerPosition.y)
+          .lineTo(first.shape.x, first.shape.y);
+      }
+    }
   }
 }

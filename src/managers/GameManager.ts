@@ -31,6 +31,11 @@ export class GameManager {
   private viewportManager: ViewportManager;
   
   private isPaused: boolean = false;
+  private currentWeaponIndex: number = 0;
+  private weaponTypes: WeaponType[] = [WeaponType.LASER, WeaponType.DUB, WeaponType.CIRCLE];
+  private lastWeaponSwitch: number = 0;
+  private killCount: number = 0;
+  private isGameOver: boolean = false;
 
   constructor(canvasId: string) {
     // Get canvas element
@@ -80,7 +85,16 @@ export class GameManager {
   }
 
   private update(event: createjs.Event): void {
-    if (this.isPaused) return;
+    // Handle input even when game over (for restart)
+    this.handleInput();
+    
+    if (this.isPaused || this.isGameOver) return;
+    
+    // Check for game over
+    if (!this.player.isAlive()) {
+      this.triggerGameOver();
+      return;
+    }
     
     // Update wave manager
     this.waveManager.update();
@@ -95,7 +109,8 @@ export class GameManager {
     this.uiManager.updateAmmoBar(
       this.phaser.getAmmoPercentage(),
       this.phaser.getCurrentAmmo(),
-      this.phaser.getMaxAmmo()
+      this.phaser.getMaxAmmo(),
+      this.phaser.getType()
     );
     if (this.waveManager.isInRestPeriod()) {
       this.uiManager.showTimer(this.waveManager.getRestTimeRemaining());
@@ -103,8 +118,7 @@ export class GameManager {
       this.uiManager.hideTimer();
     }
     
-    // Update input-based states
-    this.handleInput();
+    // Input handling moved to beginning of update for game over support
     
     // Update mouse position
     const mousePos = this.inputManager.getMousePosition();
@@ -156,9 +170,17 @@ export class GameManager {
       this.phaser.stopFiring();
     }
     
-    // Kick ability
-    if (this.inputManager.isKeyPressed('KeyE')) {
+    // Kick ability - moved to Q key
+    if (this.inputManager.isKeyPressed('KeyQ')) {
       this.kick.trigger(this.player.getPosition());
+    }
+    
+    // Weapon cycling with E key
+    const currentTime = Date.now() / 1000;
+    if (this.inputManager.isKeyPressed('KeyE') && (currentTime - this.lastWeaponSwitch) > 0.3) {
+      this.currentWeaponIndex = (this.currentWeaponIndex + 1) % this.weaponTypes.length;
+      this.phaser.setType(this.weaponTypes[this.currentWeaponIndex]);
+      this.lastWeaponSwitch = currentTime;
     }
     
     // Pause game
@@ -166,11 +188,9 @@ export class GameManager {
       this.togglePause();
     }
     
-    // Switch weapon types (for testing)
-    if (this.inputManager.isKeyPressed('Digit1')) {
-      this.phaser.setType(WeaponType.LASER);
-    } else if (this.inputManager.isKeyPressed('Digit2')) {
-      this.phaser.setType(WeaponType.DUB);
+    // Restart game (only when game over)
+    if (this.isGameOver && this.inputManager.isKeyPressed('Space')) {
+      this.restartGame();
     }
   }
 
@@ -191,6 +211,7 @@ export class GameManager {
         // Get death position before removing enemy
         const deathPos = enemy.destroy();
         this.enemies.splice(i, 1);
+        this.killCount++; // Increment kill counter
         
         // Spawn experience orb at death position
         if (deathPos) {
@@ -268,7 +289,7 @@ export class GameManager {
           
           // Check if player died
           if (!this.player.isAlive()) {
-            this.handleGameOver();
+            this.triggerGameOver();
             return;
           }
         }
@@ -296,7 +317,7 @@ export class GameManager {
           
           // Check if player died
           if (!this.player.isAlive()) {
-            this.handleGameOver();
+            this.triggerGameOver();
             return;
           }
         }
@@ -373,23 +394,35 @@ export class GameManager {
     this.enemies.push(enemy);
   }
 
-  private handleGameOver(): void {
-    // Pause the game
-    this.isPaused = true;
-    
-    // Could add game over UI here
-    console.log('Game Over!');
-    
-    // For now, just restart after a delay
-    setTimeout(() => {
-      this.restartGame();
-    }, 2000);
-  }
 
   private restartGame(): void {
-    // Reset player health
+    // Reset game state
+    this.isGameOver = false;
+    this.killCount = 0;
+    this.currentWeaponIndex = 0;
+    
+    // Remove old player from stage
+    if (this.player && this.player.shape) {
+      this.stage.removeChild(this.player.shape);
+    }
+    
+    // Remove old weapon projectiles and beam connectors
+    if (this.phaser) {
+      // Remove all projectiles
+      for (const projectile of this.phaser.getProjectiles()) {
+        if (projectile.shape) {
+          this.stage.removeChild(projectile.shape);
+        }
+      }
+    }
+    
+    // Reset player
     const center = this.viewportManager.getCanvasCenter();
     this.player = new Player(this.stage, center.x, center.y);
+    
+    // Reset weapons
+    this.phaser = new Phaser(this.stage, WeaponType.LASER);
+    this.kick = new Kick(this.stage);
     
     // Clear enemies
     for (const enemy of this.enemies) {
@@ -417,6 +450,9 @@ export class GameManager {
       (spawnInfo: EnemySpawnInfo) => this.onEnemySpawn(spawnInfo)
     );
     
+    // Hide game over screen
+    this.uiManager.hideGameOverScreen();
+    
     // Reset UI
     this.uiManager = new UIManager(this.stage, this.viewportManager);
     
@@ -427,6 +463,12 @@ export class GameManager {
   private togglePause(): void {
     this.isPaused = !this.isPaused;
   }
+  
+  private triggerGameOver(): void {
+    this.isGameOver = true;
+    this.uiManager.showGameOverScreen(this.killCount, this.waveManager.getWaveData().number);
+  }
+  
 
   public destroy(): void {
     createjs.Ticker.removeEventListener('tick', this.update);
