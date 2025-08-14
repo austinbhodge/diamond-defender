@@ -15,6 +15,7 @@ export const gameConfig: GameConfig = {
   ui: {
     waveDisplay: { x: 2, y: 2.5, anchor: { x: 'left', y: 'top' } },
     enemyCounter: { x: 2, y: 6.25, anchor: { x: 'left', y: 'top' } },
+    experienceCounter: { x: 98, y: 2.5, anchor: { x: 'right', y: 'top' } },
     timerDisplay: { x: 50, y: 2.5, anchor: { x: 'center', y: 'top' } },
     healthBar: { x: 2, y: 95, width: 200, height: 10 },
     ammoBar: { x: 98, y: 95, width: 200, height: 10 }
@@ -33,21 +34,32 @@ export const gameConfig: GameConfig = {
     acceleration: 0.12,
     hp: 50,
     circleAttack: {
-      radius: 120,
-      angularSpeed: 0.02,
+      radius: 40,
+      angularSpeed: 0.01,
       shootCooldown: 2.0,
       projectileSpeed: 3,
       projectileDamage: 15,
       projectileLifetime: 5
     },
     bigShooter: {
-      speed: 4,
+      speed: 2,
       hp: 150,
-      size: 20,
+      size: 30,
       shootCooldown: 1.2,
-      projectileSpeed: 4,
+      projectileSpeed: 10,
       projectileDamage: 20,
       projectileLifetime: 6
+    },
+    dashWorm: {
+      speed: 4,
+      hp: 25,
+      dashSpeed: 15,
+      dashCooldown: 2.5,
+      dashDuration: 0.3,
+      detectionRadius: 80,
+      segmentCount: 5,
+      segmentSize: 8  ,
+      headSize: 6
     }
   },
   weapons: {
@@ -69,7 +81,7 @@ export const gameConfig: GameConfig = {
       projectileSize: 8
     },
     kick: {
-      maxRadius: 30,
+      maxRadius: 200,
       expandRate: 1,
       decayRate: 100
     }

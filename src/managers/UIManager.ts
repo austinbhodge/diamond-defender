@@ -8,8 +8,10 @@ export class UIManager implements GameObject {
   private viewportManager: ViewportManager;
   private waveCircles: createjs.Shape[] = [];
   private enemyCircles: createjs.Shape[] = [];
+  private experienceCircles: createjs.Shape[] = [];
   private waveContainer: createjs.Container;
   private enemyContainer: createjs.Container;
+  private experienceContainer: createjs.Container;
   private timerDisplay: createjs.Text;
   private wavePopup: createjs.Container | null = null;
   private score: number = 0;
@@ -70,6 +72,14 @@ export class UIManager implements GameObject {
     this.stage.addChild(this.enemyContainer);
     this.updateEnemyCircles(0); // Start with 0 enemies
 
+    // Experience circles (top-right) - green circles
+    this.experienceContainer = new createjs.Container();
+    const expPos = this.viewportManager.getResponsivePosition(ui.experienceCounter.x, ui.experienceCounter.y, 'right', 'top');
+    this.experienceContainer.x = expPos.x;
+    this.experienceContainer.y = expPos.y;
+    this.stage.addChild(this.experienceContainer);
+    this.updateExperienceCircles(0); // Start with 0 experience
+
     // Timer display (top-center)
     this.timerDisplay = new createjs.Text('', `${this.viewportManager.getScaledFont(20)}px Hammersmith One`, '#ffff00');
     const timerPos = this.viewportManager.getResponsivePosition(ui.timerDisplay.x, ui.timerDisplay.y, 'center', 'top');
@@ -114,6 +124,10 @@ export class UIManager implements GameObject {
   public updateWaveInfo(waveData: WaveData): void {
     this.updateWaveCircles(waveData.number);
     this.updateEnemyCircles(waveData.enemiesRemaining);
+  }
+
+  public updateExperienceDisplay(experienceCount: number): void {
+    this.updateExperienceCircles(experienceCount);
   }
   
   private updateWaveCircles(waveNumber: number): void {
@@ -180,8 +194,62 @@ export class UIManager implements GameObject {
     }
   }
 
+  private updateExperienceCircles(experienceCount: number): void {
+    // Clear existing circles
+    this.experienceContainer.removeAllChildren();
+    this.experienceCircles = [];
+    
+    // Each circle represents 5 experience points
+    const experiencePerCircle = 5;
+    const circleCount = Math.floor(experienceCount / experiencePerCircle);
+    
+    // Create green circles for experience count (limit display to prevent UI overflow)
+    const maxDisplay = 15; // Maximum circles to display
+    const displayCount = Math.min(circleCount, maxDisplay);
+    const circleSize = 5;
+    const spacing = 14;
+    const circlesPerRow = 8;
+    
+    for (let i = 0; i < displayCount; i++) {
+      const circle = new createjs.Shape();
+      circle.graphics
+        .setStrokeStyle(2)
+        .beginStroke('#004400') // Dark green border
+        .beginFill('#00cc44')   // Bright green fill
+        .drawCircle(0, 0, circleSize);
+      
+      // Arrange in rows, stacking to the left (reverse order)
+      const row = Math.floor(i / circlesPerRow);
+      const col = i % circlesPerRow;
+      circle.x = -(col * spacing); // Negative X to stack left
+      circle.y = row * spacing;
+      
+      this.experienceContainer.addChild(circle);
+      this.experienceCircles.push(circle);
+    }
+    
+    // If more circles than max display, add a "+" indicator
+    if (circleCount > maxDisplay) {
+      const remainingCircles = circleCount - maxDisplay;
+      const remainingExperience = remainingCircles * experiencePerCircle;
+      const plusText = new createjs.Text(`+${remainingExperience}`, '10px Hammersmith One', '#00cc44');
+      const lastRow = Math.floor((displayCount - 1) / circlesPerRow);
+      plusText.x = -((displayCount % circlesPerRow) * spacing + 16); // Negative X for left stacking
+      plusText.y = lastRow * spacing - 5;
+      this.experienceContainer.addChild(plusText);
+    }
+  }
+
   public showTimer(timeRemaining: number): void {
-    this.timerDisplay.text = `Next Wave in: ${Math.ceil(timeRemaining)}s`;
+    if (timeRemaining <= 3) {
+      // Show countdown during wave start countdown
+      this.timerDisplay.text = `Wave starting in: ${Math.ceil(timeRemaining)}s`;
+      this.timerDisplay.color = '#ff0000'; // Red for countdown
+    } else {
+      // This shouldn't happen with new system, but fallback
+      this.timerDisplay.text = `Next Wave in: ${Math.ceil(timeRemaining)}s`;
+      this.timerDisplay.color = '#ffff00'; // Yellow for normal timer
+    }
     this.timerDisplay.alpha = 1;
   }
 
@@ -347,15 +415,17 @@ export class UIManager implements GameObject {
   }
   
   public resetCounters(): void {
-    // Reset to initial state: Wave 1, 0 enemies
+    // Reset to initial state: Wave 1, 0 enemies, 0 experience
     this.updateWaveCircles(1);
     this.updateEnemyCircles(0);
+    this.updateExperienceCircles(0);
   }
   
   public destroy(): void {
     // Clean up all UI elements
     if (this.waveContainer) this.stage.removeChild(this.waveContainer);
     if (this.enemyContainer) this.stage.removeChild(this.enemyContainer);
+    if (this.experienceContainer) this.stage.removeChild(this.experienceContainer);
     if (this.timerDisplay) this.stage.removeChild(this.timerDisplay);
     if (this.healthBackground) this.stage.removeChild(this.healthBackground);
     if (this.healthFill) this.stage.removeChild(this.healthFill);
@@ -399,7 +469,7 @@ export class UIManager implements GameObject {
 
     // Subtitle - responsive sizing and positioning
     const subtitle = new createjs.Text(
-      'Preparing next wave...',
+      'Walk into the white zone to start',
       `${this.viewportManager.getScaledFont(24)}px Hammersmith One`,
       '#ffffff'
     );
@@ -649,6 +719,10 @@ export class UIManager implements GameObject {
     const enemyPos = this.viewportManager.getResponsivePosition(ui.enemyCounter.x, ui.enemyCounter.y, 'left', 'top');
     this.enemyContainer.x = enemyPos.x;
     this.enemyContainer.y = enemyPos.y;
+
+    const expPos = this.viewportManager.getResponsivePosition(ui.experienceCounter.x, ui.experienceCounter.y, 'right', 'top');
+    this.experienceContainer.x = expPos.x;
+    this.experienceContainer.y = expPos.y;
 
     const timerPos = this.viewportManager.getResponsivePosition(ui.timerDisplay.x, ui.timerDisplay.y, 'center', 'top');
     this.timerDisplay.x = timerPos.x;

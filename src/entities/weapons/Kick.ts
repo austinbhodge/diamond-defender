@@ -93,6 +93,14 @@ export class Kick implements GameObject {
     return this.loop;
   }
 
+  public getPosition(): Position {
+    return { x: this.shape.x, y: this.shape.y };
+  }
+
+  public getCurrentRadius(): number {
+    return this.maxRadius * this.shape.scaleX;
+  }
+
   public checkCollision(position: Position, radius: number): boolean {
     if (!this.loop) return false;
     

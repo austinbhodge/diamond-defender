@@ -399,6 +399,15 @@ export class Phaser implements GameObject {
   public getType(): WeaponType {
     return this.type;
   }
+
+  public refillAllAmmo(): void {
+    // Refill ammo for all weapon types
+    for (const [weaponType, config] of this.weaponConfigs.entries()) {
+      const ammo = this.weaponAmmo.get(weaponType)!;
+      ammo.current = ammo.max;
+      ammo.regenTimer = 0;
+    }
+  }
   
   private drawBeamConnections(circleProjectiles: Projectile[]): void {
     // Sort projectiles by distance from player (closest first)

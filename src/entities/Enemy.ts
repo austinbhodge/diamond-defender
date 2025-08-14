@@ -40,6 +40,19 @@ export class Enemy implements GameEntity {
   private swipeCooldown: number = 3; // 3 seconds between swipes
   private hasSwipeHitPlayer: boolean = false; // Track if current swipe has hit player
 
+  // Dash worm properties
+  private segments: createjs.Shape[] = [];
+  private connectors: createjs.Shape[] = [];
+  private segmentPositions: Position[] = [];
+  private dashCooldown: number = 2.5;
+  private dashDuration: number = 0.3;
+  private dashSpeed: number = 15;
+  private detectionRadius: number = 80;
+  private lastDashTime: number = 0;
+  private isDashing: boolean = false;
+  private dashDirection: Position = { x: 0, y: 0 };
+  private dashTimer: number = 0;
+
   constructor(stage: createjs.Stage, player: Player, x: number = 0, y: number = 0, hp?: number, speed?: number, attackPattern: EnemyAttackPattern = EnemyAttackPattern.CHASE) {
     this.stage = stage;
     this.player = player;
@@ -51,6 +64,13 @@ export class Enemy implements GameEntity {
     if (attackPattern === EnemyAttackPattern.BIG_SHOOTER) {
       this.hp = hp || gameConfig.enemy.bigShooter.hp;
       this.speed = speed || gameConfig.enemy.bigShooter.speed;
+    } else if (attackPattern === EnemyAttackPattern.DASH_WORM) {
+      this.hp = hp || gameConfig.enemy.dashWorm.hp;
+      this.speed = speed || gameConfig.enemy.dashWorm.speed;
+      this.dashCooldown = gameConfig.enemy.dashWorm.dashCooldown;
+      this.dashDuration = gameConfig.enemy.dashWorm.dashDuration;
+      this.dashSpeed = gameConfig.enemy.dashWorm.dashSpeed;
+      this.detectionRadius = gameConfig.enemy.dashWorm.detectionRadius;
     } else {
       this.hp = hp || gameConfig.enemy.hp;
       this.speed = speed || gameConfig.enemy.baseSpeed;
@@ -78,6 +98,11 @@ export class Enemy implements GameEntity {
     if (attackPattern === EnemyAttackPattern.CHASE) {
       this.swipeAttack = new SwipeAttack(stage);
     }
+    
+    // Initialize worm segments for DASH_WORM pattern
+    if (attackPattern === EnemyAttackPattern.DASH_WORM) {
+      this.createWormSegments();
+    }
   }
 
   public update(): void {
@@ -87,6 +112,8 @@ export class Enemy implements GameEntity {
       this.updateCirclePattern();
     } else if (this.attackPattern === EnemyAttackPattern.BIG_SHOOTER) {
       this.updateBigShooterPattern();
+    } else if (this.attackPattern === EnemyAttackPattern.DASH_WORM) {
+      this.updateDashWormPattern();
     }
     
     this.updatePosition();
@@ -97,16 +124,7 @@ export class Enemy implements GameEntity {
       this.swipeAttack.updatePosition(this.position);
       this.swipeAttack.update();
       
-      // Check for player collision with swipe attack
-      if (this.swipeAttack.isActive() && !this.hasSwipeHitPlayer) {
-        const playerPos = this.player.getPosition();
-        if (this.swipeAttack.checkPlayerCollision(playerPos)) {
-          // Apply swipe damage to player
-          const swipeDamage = this.swipeAttack.getDamage();
-          this.player.takeDamage(swipeDamage);
-          this.hasSwipeHitPlayer = true; // Prevent multiple hits from same swipe
-        }
-      }
+      // Collision detection is now handled by GameManager
       
       // Reset hit flag when swipe is no longer active
       if (!this.swipeAttack.isActive()) {
@@ -230,6 +248,17 @@ export class Enemy implements GameEntity {
       this.swipeAttack = null;
     }
     
+    // Clean up worm segments and connectors
+    for (const segment of this.segments) {
+      this.stage.removeChild(segment);
+    }
+    for (const connector of this.connectors) {
+      this.stage.removeChild(connector);
+    }
+    this.segments = [];
+    this.connectors = [];
+    this.segmentPositions = [];
+    
     // Return the position before destroying for orb spawning
     const deathPosition = { ...this.position };
     this.stage.removeChild(this.shape);
@@ -273,6 +302,12 @@ export class Enemy implements GameEntity {
       this.shape.graphics
         .beginFill("rgb(220, 50, 50)")
         .drawCircle(0, 0, size * 0.6);
+    } else if (this.attackPattern === EnemyAttackPattern.DASH_WORM) {
+      // For dash worm, the main shape is invisible as we use segments
+      // But we need a shape for collision detection (using head size)
+      this.shape.graphics
+        .beginFill("rgba(200, 0, 0, 0)") // Invisible
+        .drawCircle(0, 0, gameConfig.enemy.dashWorm.headSize);
     }
   }
 
@@ -318,6 +353,247 @@ export class Enemy implements GameEntity {
     if (currentTime - this.lastShotTime >= gameConfig.enemy.circleAttack.shootCooldown) {
       this.shootAtPlayer();
       this.lastShotTime = currentTime;
+    }
+  }
+
+  private createWormSegments(): void {
+    const config = gameConfig.enemy.dashWorm;
+    
+    // Clear any existing segments and connectors
+    for (const segment of this.segments) {
+      this.stage.removeChild(segment);
+    }
+    for (const connector of this.connectors) {
+      this.stage.removeChild(connector);
+    }
+    this.segments = [];
+    this.connectors = [];
+    this.segmentPositions = [];
+    
+    // Create segments starting from current position
+    for (let i = 0; i < config.segmentCount; i++) {
+      const segment = new createjs.Shape();
+      
+      if (i === 0) {
+        // Head is larger and darker red
+        segment.graphics
+          .beginFill("rgb(200, 0, 0)")
+          .drawCircle(0, 0, config.headSize);
+      } else {
+        // Body segments are smaller and lighter red
+        const alpha = 1 - (i * 0.15); // Fade towards tail
+        segment.graphics
+          .beginFill(`rgba(180, 20, 20, ${alpha})`)
+          .drawCircle(0, 0, config.segmentSize);
+      }
+      
+      // Position segments behind the head
+      const segmentPosition = {
+        x: this.position.x - (i * config.segmentSize * 1.5),
+        y: this.position.y
+      };
+      
+      segment.x = segmentPosition.x;
+      segment.y = segmentPosition.y;
+      
+      this.segments.push(segment);
+      this.segmentPositions.push(segmentPosition);
+      this.stage.addChild(segment);
+      
+      // Create connector oval between this segment and the previous one
+      if (i > 0) {
+        const connector = new createjs.Shape();
+        this.connectors.push(connector);
+        this.stage.addChild(connector);
+      }
+    }
+    
+    // Initial update of connectors
+    this.updateWormConnectors();
+  }
+
+  private updateDashWormPattern(): void {
+    const playerPos = this.player.getPosition();
+    const currentTime = Date.now() / 1000;
+    
+    // Check if we should dash to dodge bullets
+    const shouldDash = this.shouldDashToDodgeBullets(playerPos);
+    
+    if (this.isDashing) {
+      // Continue dashing
+      this.dashTimer += 1 / gameConfig.fps;
+      
+      // Move in dash direction
+      this.velocity.x = this.dashDirection.x * this.dashSpeed;
+      this.velocity.y = this.dashDirection.y * this.dashSpeed;
+      
+      // Check if dash is complete
+      if (this.dashTimer >= this.dashDuration) {
+        this.isDashing = false;
+        this.dashTimer = 0;
+        this.lastDashTime = currentTime;
+      }
+    } else if (shouldDash && currentTime - this.lastDashTime >= this.dashCooldown) {
+      // Start a new dash
+      this.startDash(playerPos);
+    } else {
+      // Normal movement toward player (slower than chase enemies)
+      const dx = playerPos.x - this.position.x;
+      const dy = playerPos.y - this.position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance > 0) {
+        const normalizedDx = dx / distance;
+        const normalizedDy = dy / distance;
+        
+        // More cautious approach
+        this.velocity.x += normalizedDx * this.acceleration * 0.8;
+        this.velocity.y += normalizedDy * this.acceleration * 0.8;
+      }
+    }
+    
+    // Apply boundary forces
+    this.applyBoundaryForces();
+    
+    // Limit velocity to max speed (unless dashing)
+    if (!this.isDashing) {
+      const currentSpeed = Math.sqrt(this.velocity.x ** 2 + this.velocity.y ** 2);
+      if (currentSpeed > this.speed) {
+        const scale = this.speed / currentSpeed;
+        this.velocity.x *= scale;
+        this.velocity.y *= scale;
+      }
+    }
+    
+    // Calculate rotation angle based on movement direction
+    if (this.velocity.x !== 0 || this.velocity.y !== 0) {
+      this.angle = Math.atan2(this.velocity.y, this.velocity.x) * (180 / Math.PI) + 90;
+    }
+    
+    // Update worm segments to follow the head
+    this.updateWormSegments();
+  }
+
+  private shouldDashToDodgeBullets(playerPos: Position): boolean {
+    // Get player's projectiles from the game manager (we'll need to add this)
+    // For now, use simple distance-based dodging when player is aiming at us
+    
+    const dx = playerPos.x - this.position.x;
+    const dy = playerPos.y - this.position.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    // If player is close and we're in their line of sight, consider dashing
+    if (distance < this.detectionRadius) {
+      // Add some randomness to make it feel more organic
+      const dashChance = 0.3; // 30% chance per frame when in danger
+      return Math.random() < dashChance;
+    }
+    
+    return false;
+  }
+
+  private startDash(playerPos: Position): void {
+    this.isDashing = true;
+    this.dashTimer = 0;
+    
+    // Calculate dash direction (perpendicular to player direction with some randomness)
+    const dx = playerPos.x - this.position.x;
+    const dy = playerPos.y - this.position.y;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+    
+    if (distance > 0) {
+      // Perpendicular direction (90 degrees rotated)
+      const perpX = -dy / distance;
+      const perpY = dx / distance;
+      
+      // Add some randomness to the dash direction
+      const randomAngle = (Math.random() - 0.5) * Math.PI * 0.5; // ±45 degrees
+      const cos = Math.cos(randomAngle);
+      const sin = Math.sin(randomAngle);
+      
+      this.dashDirection.x = perpX * cos - perpY * sin;
+      this.dashDirection.y = perpX * sin + perpY * cos;
+    } else {
+      // Random direction if player is at same position
+      const randomAngle = Math.random() * Math.PI * 2;
+      this.dashDirection.x = Math.cos(randomAngle);
+      this.dashDirection.y = Math.sin(randomAngle);
+    }
+  }
+
+  private updateWormSegments(): void {
+    if (this.segments.length === 0) return;
+    
+    // Update head position (segment 0)
+    this.segments[0].x = this.position.x;
+    this.segments[0].y = this.position.y;
+    this.segmentPositions[0] = { x: this.position.x, y: this.position.y };
+    
+    // Update body segments to follow
+    for (let i = 1; i < this.segments.length; i++) {
+      const currentSeg = this.segmentPositions[i];
+      const targetSeg = this.segmentPositions[i - 1];
+      
+      // Calculate direction to previous segment
+      const dx = targetSeg.x - currentSeg.x;
+      const dy = targetSeg.y - currentSeg.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      const segmentDistance = gameConfig.enemy.dashWorm.segmentSize * 1.2;
+      
+      if (distance > segmentDistance) {
+        // Move toward previous segment
+        const moveRatio = (distance - segmentDistance) / distance;
+        currentSeg.x += dx * moveRatio * 0.1; // Smooth following
+        currentSeg.y += dy * moveRatio * 0.1;
+      }
+      
+      // Update visual position
+      this.segments[i].x = currentSeg.x;
+      this.segments[i].y = currentSeg.y;
+    }
+    
+    // Update connectors between segments
+    this.updateWormConnectors();
+  }
+
+  private updateWormConnectors(): void {
+    if (this.connectors.length === 0) return;
+    
+    const config = gameConfig.enemy.dashWorm;
+    
+    for (let i = 0; i < this.connectors.length; i++) {
+      const connector = this.connectors[i];
+      const segmentIndex = i + 1; // Connector i connects segment i+1 to segment i
+      
+      if (segmentIndex < this.segmentPositions.length) {
+        const fromPos = this.segmentPositions[i];
+        const toPos = this.segmentPositions[segmentIndex];
+        
+        // Calculate connector properties
+        const dx = toPos.x - fromPos.x;
+        const dy = toPos.y - fromPos.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx);
+        
+        // Calculate connector dimensions
+        const connectorWidth = Math.max(distance, config.segmentSize * 0.5);
+        const connectorHeight = config.segmentSize * 1.12; // 40% thicker (0.8 * 1.4)
+        
+        // Calculate alpha for fading effect
+        const alpha = Math.max(0.3, 1 - (segmentIndex * 0.12)); // Fade but not completely transparent
+        
+        // Clear and redraw connector
+        connector.graphics.clear();
+        connector.graphics
+          .beginFill(`rgba(160, 20, 20, ${alpha})`)
+          .drawEllipse(-connectorWidth/2, -connectorHeight/2, connectorWidth, connectorHeight);
+        
+        // Position and rotate connector
+        connector.x = fromPos.x + dx * 0.5; // Center between segments
+        connector.y = fromPos.y + dy * 0.5;
+        connector.rotation = angle * (180 / Math.PI);
+      }
     }
   }
 
@@ -440,13 +716,93 @@ export class Enemy implements GameEntity {
       return gameConfig.enemy.bigShooter.size;
     } else if (this.attackPattern === EnemyAttackPattern.CIRCLE_SHOOT) {
       return 8; // Slightly larger than chase enemies
+    } else if (this.attackPattern === EnemyAttackPattern.DASH_WORM) {
+      return gameConfig.enemy.dashWorm.headSize;
     } else {
       return 7; // Default chase enemy size
     }
   }
 
+  public checkWormCollision(position: Position, radius: number): boolean {
+    if (this.attackPattern !== EnemyAttackPattern.DASH_WORM) {
+      // Fallback to normal collision for non-worm enemies
+      const dx = position.x - this.position.x;
+      const dy = position.y - this.position.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      return distance < (radius + this.getCollisionRadius());
+    }
+
+    const config = gameConfig.enemy.dashWorm;
+    
+    // Check collision with each segment
+    for (let i = 0; i < this.segmentPositions.length; i++) {
+      const segmentPos = this.segmentPositions[i];
+      const segmentRadius = i === 0 ? config.headSize : config.segmentSize;
+      
+      const dx = position.x - segmentPos.x;
+      const dy = position.y - segmentPos.y;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance < (radius + segmentRadius)) {
+        return true;
+      }
+    }
+    
+    // Check collision with connectors (oval-shaped areas between segments)
+    for (let i = 0; i < this.segmentPositions.length - 1; i++) {
+      const fromPos = this.segmentPositions[i];
+      const toPos = this.segmentPositions[i + 1];
+      
+      if (this.checkOvalCollision(position, radius, fromPos, toPos, config.segmentSize * 1.12)) {
+        return true;
+      }
+    }
+    
+    return false;
+  }
+
+  private checkOvalCollision(point: Position, pointRadius: number, ovalStart: Position, ovalEnd: Position, ovalHeight: number): boolean {
+    // Simplified oval collision - treat as capsule (line segment with rounded ends)
+    const dx = ovalEnd.x - ovalStart.x;
+    const dy = ovalEnd.y - ovalStart.y;
+    const length = Math.sqrt(dx * dx + dy * dy);
+    
+    if (length === 0) return false;
+    
+    // Normalize the line direction
+    const unitX = dx / length;
+    const unitY = dy / length;
+    
+    // Project point onto the line
+    const pointDx = point.x - ovalStart.x;
+    const pointDy = point.y - ovalStart.y;
+    const projection = pointDx * unitX + pointDy * unitY;
+    
+    // Clamp projection to line segment
+    const clampedProjection = Math.max(0, Math.min(length, projection));
+    
+    // Find closest point on line segment
+    const closestX = ovalStart.x + clampedProjection * unitX;
+    const closestY = ovalStart.y + clampedProjection * unitY;
+    
+    // Check distance from point to closest point on oval
+    const distanceX = point.x - closestX;
+    const distanceY = point.y - closestY;
+    const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+    
+    return distance < (pointRadius + ovalHeight / 2);
+  }
+
   public getSwipeAttack(): SwipeAttack | null {
     return this.swipeAttack;
+  }
+
+  public hasSwipeHitPlayerAlready(): boolean {
+    return this.hasSwipeHitPlayer;
+  }
+
+  public markSwipeAsHit(): void {
+    this.hasSwipeHitPlayer = true;
   }
 
   // Health bar methods

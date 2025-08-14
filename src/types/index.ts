@@ -30,7 +30,8 @@ export enum EnemyAttackPattern {
   CHASE = 'chase',
   CIRCLE_SHOOT = 'circle_shoot',
   BIG_SHOOTER = 'big_shooter',
-  SWIPE = 'swipe'
+  SWIPE = 'swipe',
+  DASH_WORM = 'dash_worm'
 }
 
 export interface WeaponProjectile {
@@ -91,6 +92,17 @@ export interface GameConfig {
       projectileSpeed: number;
       projectileDamage: number;
       projectileLifetime: number;
+    };
+    dashWorm: {
+      speed: number;
+      hp: number;
+      dashSpeed: number;
+      dashCooldown: number;
+      dashDuration: number;
+      detectionRadius: number;
+      segmentCount: number;
+      segmentSize: number;
+      headSize: number;
     };
   };
   weapons: {

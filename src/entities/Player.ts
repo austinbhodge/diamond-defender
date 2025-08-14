@@ -210,6 +210,12 @@ export class Player implements GameEntity {
     return true; // Damage was applied
   }
 
+  public addHealth(amount: number): number {
+    const oldHealth = this.currentHealth;
+    this.currentHealth = Math.min(this.maxHealth, this.currentHealth + amount);
+    return this.currentHealth - oldHealth; // Return actual health gained
+  }
+
   public isAlive(): boolean {
     return this.currentHealth > 0;
   }

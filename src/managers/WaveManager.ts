@@ -13,6 +13,8 @@ export class WaveManager implements GameObject {
   private config: WaveConfig;
   private restTimer: number = 0;
   private spawnTimer: number = 0;
+  private countdownTimer: number = 0;
+  private countingDown: boolean = false;
   private onWaveStart: () => void;
   private onWaveComplete: () => void;
   private onEnemySpawn: (spawnInfo: EnemySpawnInfo) => void;
@@ -79,11 +81,16 @@ export class WaveManager implements GameObject {
   }
 
   private handleRestPeriod(deltaTime: number): void {
-    this.restTimer -= deltaTime;
-    
-    if (this.restTimer <= 0) {
-      this.startNextWave();
+    // Handle countdown if triggered manually
+    if (this.countingDown) {
+      this.countdownTimer -= deltaTime;
+      
+      if (this.countdownTimer <= 0) {
+        this.countingDown = false;
+        this.startNextWave();
+      }
     }
+    // No automatic progression - waves only start manually
   }
 
   private startWave(): void {
@@ -156,7 +163,7 @@ export class WaveManager implements GameObject {
 
   private completeWave(): void {
     this.waveData.state = WaveState.REST;
-    this.restTimer = this.config.restDuration;
+    this.restTimer = 0; // No automatic timer
     this.onWaveComplete();
   }
 
@@ -176,8 +183,23 @@ export class WaveManager implements GameObject {
     return Math.max(0, this.restTimer);
   }
 
+  public getCountdownTimeRemaining(): number {
+    return Math.max(0, this.countdownTimer);
+  }
+
+  public isCountingDown(): boolean {
+    return this.countingDown;
+  }
+
   public isInRestPeriod(): boolean {
     return this.waveData.state === WaveState.REST;
+  }
+
+  public triggerWaveStart(): void {
+    if (this.waveData.state === WaveState.REST && !this.countingDown) {
+      this.countingDown = true;
+      this.countdownTimer = 3; // 3 second countdown
+    }
   }
 
   public getCurrentWave(): number {

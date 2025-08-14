@@ -6,8 +6,9 @@ import { EnemyProjectile } from '@entities/EnemyProjectile';
 import { Mouse } from '@entities/Mouse';
 import { Phaser } from '@entities/weapons/Phaser';
 import { Kick } from '@entities/weapons/Kick';
+import { WaveTriggerZone } from '@entities/WaveTriggerZone';
+import { HealthTradingZone } from '@entities/HealthTradingZone';
 import { InputManager } from './InputManager';
-import { UpgradeManager } from './UpgradeManager';
 import { WaveManager, EnemySpawnInfo } from './WaveManager';
 import { UIManager } from './UIManager';
 import { gameConfig } from '@config/gameConfig';
@@ -25,10 +26,11 @@ export class GameManager {
   private phaser: Phaser;
   private kick: Kick;
   private inputManager: InputManager;
-  private upgradeManager: UpgradeManager;
   private waveManager: WaveManager;
   private uiManager: UIManager;
   private viewportManager: ViewportManager;
+  private waveTriggerZone: WaveTriggerZone;
+  private healthTradingZone: HealthTradingZone;
   
   private isPaused: boolean = false;
   private currentWeaponIndex: number = 0;
@@ -69,7 +71,6 @@ export class GameManager {
     this.kick = new Kick(this.stage);
     
     // Initialize managers
-    this.upgradeManager = new UpgradeManager(this.stage);
     this.uiManager = new UIManager(this.stage, this.viewportManager);
     
     // Initialize wave manager with callbacks
@@ -78,6 +79,15 @@ export class GameManager {
       () => this.onWaveComplete(),
       (spawnInfo: EnemySpawnInfo) => this.onEnemySpawn(spawnInfo)
     );
+    
+    // Initialize wave trigger zone
+    this.waveTriggerZone = new WaveTriggerZone(this.stage, this.viewportManager);
+    
+    // Initialize health trading zone
+    this.healthTradingZone = new HealthTradingZone(this.stage, this.viewportManager);
+    
+    // Show trigger zone initially for testing - will be hidden when first wave starts
+    this.waveTriggerZone.show();
     
     // Set up ticker
     createjs.Ticker.framerate = gameConfig.fps;
@@ -99,8 +109,50 @@ export class GameManager {
     // Update wave manager
     this.waveManager.update();
     
+    // Update wave trigger zone
+    this.waveTriggerZone.updatePosition();
+    this.waveTriggerZone.update();
+    
+    // Update health trading zone
+    this.healthTradingZone.updatePosition();
+    this.healthTradingZone.update();
+    
+    // Check wave trigger zone collision
+    if (this.waveManager.isInRestPeriod() && this.waveTriggerZone.isVisible()) {
+      if (this.waveTriggerZone.checkCollision(this.player.getPosition())) {
+        // Trigger wave start countdown
+        this.waveManager.triggerWaveStart();
+        this.phaser.refillAllAmmo(); // Refill ammo when triggering wave
+        this.waveTriggerZone.hide();
+      }
+    }
+    
+    // Check health trading zone collision
+    if (this.waveManager.isInRestPeriod() && this.healthTradingZone.isVisible()) {
+      const playerPos = this.player.getPosition();
+      const isInZone = this.healthTradingZone.checkCollision(playerPos);
+      
+      // Update zone state
+      this.healthTradingZone.setPlayerInZone(isInZone);
+      
+      // Handle trading
+      if (isInZone && this.healthTradingZone.canTrade()) {
+        const experienceCost = this.healthTradingZone.getExperienceCost();
+        const healthGain = this.healthTradingZone.getHealthGain();
+        
+        // Check if player has enough experience and isn't at max health
+        if (this.totalExperience >= experienceCost && this.player.getCurrentHealth() < this.player.getMaxHealth()) {
+          // Perform the trade
+          this.totalExperience -= experienceCost;
+          this.player.addHealth(healthGain);
+          this.healthTradingZone.resetTradingTimer();
+        }
+      }
+    }
+    
     // Update UI
     this.uiManager.updateWaveInfo(this.waveManager.getWaveData());
+    this.uiManager.updateExperienceDisplay(this.totalExperience);
     this.uiManager.updateHealthBar(
       this.player.getHealthPercentage(),
       this.player.getCurrentHealth(),
@@ -112,8 +164,14 @@ export class GameManager {
       this.phaser.getMaxAmmo(),
       this.phaser.getType()
     );
+    
+    // Update timer display based on wave state
     if (this.waveManager.isInRestPeriod()) {
-      this.uiManager.showTimer(this.waveManager.getRestTimeRemaining());
+      if (this.waveManager.isCountingDown()) {
+        this.uiManager.showTimer(this.waveManager.getCountdownTimeRemaining());
+      } else {
+        this.uiManager.hideTimer();
+      }
     } else {
       this.uiManager.hideTimer();
     }
@@ -147,8 +205,6 @@ export class GameManager {
     // Update experience orbs
     this.updateExperienceOrbs();
     
-    // Update upgrade manager
-    this.upgradeManager.update();
     
     // Check collisions
     this.checkCollisions();
@@ -222,7 +278,6 @@ export class GameManager {
         // Award points and notify wave manager
         const points = this.waveManager.getPointsPerKill();
         this.uiManager.addScore(points);
-        this.upgradeManager.addPoints(points);
         this.waveManager.onEnemyKilled();
       }
     }
@@ -255,8 +310,6 @@ export class GameManager {
         orb.collect();
         this.totalExperience += orb.getExperienceValue();
         
-        // Also add to upgrade manager points for now
-        this.upgradeManager.addPoints(orb.getExperienceValue());
         
         // Log for debugging
         console.log(`Experience collected: ${orb.getExperienceValue()}, Total: ${this.totalExperience}`);
@@ -276,14 +329,23 @@ export class GameManager {
         const playerPos = this.player.getPosition();
         const enemyPos = enemy.getPosition();
         
-        // Calculate distance between player and enemy
-        const dx = playerPos.x - enemyPos.x;
-        const dy = playerPos.y - enemyPos.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        // Check collision using appropriate method based on enemy type
+        const playerRadius = 14;
+        let collision = false;
         
-        // Player radius (14) + Enemy radius (dynamic based on type) + buffer
-        const collisionDistance = 14 + enemy.getCollisionRadius() + 5;
-        if (distance < collisionDistance) {
+        if (enemy.checkWormCollision) {
+          // Use worm-specific collision detection
+          collision = enemy.checkWormCollision(playerPos, playerRadius + 5);
+        } else {
+          // Use standard circular collision
+          const dx = playerPos.x - enemyPos.x;
+          const dy = playerPos.y - enemyPos.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const collisionDistance = playerRadius + enemy.getCollisionRadius() + 5;
+          collision = distance < collisionDistance;
+        }
+        
+        if (collision) {
           // Apply damage to player
           const damageApplied = this.player.takeDamage(gameConfig.player.damagePerCollision);
           
@@ -294,6 +356,22 @@ export class GameManager {
           }
         }
         
+        // Check swipe attack collisions
+        const swipeAttack = enemy.getSwipeAttack();
+        if (swipeAttack && swipeAttack.isActive() && !enemy.hasSwipeHitPlayerAlready()) {
+          if (swipeAttack.checkPlayerCollision(playerPos)) {
+            // Apply swipe damage to player
+            const swipeDamage = swipeAttack.getDamage();
+            const damageApplied = this.player.takeDamage(swipeDamage);
+            enemy.markSwipeAsHit(); // Prevent multiple hits from same swipe
+            
+            // Check if player died
+            if (!this.player.isAlive()) {
+              this.triggerGameOver();
+              return;
+            }
+          }
+        }
       }
       
       // Check enemy projectile-player collisions
@@ -328,7 +406,17 @@ export class GameManager {
     // Check kick collisions with enemies
     if (this.kick.isActive()) {
       for (const enemy of this.enemies) {
-        if (this.kick.checkCollision(enemy.getPosition(), enemy.getCollisionRadius())) {
+        let kickHit = false;
+        
+        if (enemy.checkWormCollision) {
+          // Use worm-specific collision detection for kick
+          kickHit = enemy.checkWormCollision(this.kick.getPosition(), this.kick.getCurrentRadius());
+        } else {
+          // Use standard collision
+          kickHit = this.kick.checkCollision(enemy.getPosition(), enemy.getCollisionRadius());
+        }
+        
+        if (kickHit) {
           enemy.takeDamage(25);
         }
       }
@@ -338,14 +426,23 @@ export class GameManager {
     const projectiles = this.phaser.getProjectiles();
     for (const projectile of projectiles) {
       for (const enemy of this.enemies) {
-        // Simple distance-based collision
-        const dx = projectile.shape.x - enemy.shape.x;
-        const dy = projectile.shape.y - enemy.shape.y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
+        let projectileHit = false;
+        const projectilePos = { x: projectile.shape.x, y: projectile.shape.y };
+        const projectileRadius = 3;
         
-        // Projectile radius (small) + Enemy radius (dynamic) + small buffer
-        const collisionDistance = 3 + enemy.getCollisionRadius() + 2;
-        if (distance < collisionDistance) {
+        if (enemy.checkWormCollision) {
+          // Use worm-specific collision detection for projectiles
+          projectileHit = enemy.checkWormCollision(projectilePos, projectileRadius + 2);
+        } else {
+          // Use standard collision
+          const dx = projectilePos.x - enemy.shape.x;
+          const dy = projectilePos.y - enemy.shape.y;
+          const distance = Math.sqrt(dx * dx + dy * dy);
+          const collisionDistance = projectileRadius + enemy.getCollisionRadius() + 2;
+          projectileHit = distance < collisionDistance;
+        }
+        
+        if (projectileHit) {
           enemy.takeDamage(10);
           projectile.shape.alpha = 0; // Mark for removal
         }
@@ -356,10 +453,14 @@ export class GameManager {
   // Wave manager callbacks
   private onWaveStart(): void {
     this.uiManager.showWaveStartPopup(this.waveManager.getCurrentWave());
+    this.waveTriggerZone.hide(); // Hide trigger zone when wave starts
+    this.healthTradingZone.hide(); // Hide health trading zone when wave starts
   }
 
   private onWaveComplete(): void {
     this.uiManager.showWaveCompletePopup();
+    this.waveTriggerZone.show(); // Show trigger zone when wave completes
+    this.healthTradingZone.show(); // Show health trading zone when wave completes
   }
 
   private onEnemySpawn(spawnInfo: EnemySpawnInfo): void {
@@ -367,15 +468,23 @@ export class GameManager {
     const currentWave = this.waveManager.getCurrentWave();
     let attackPattern = EnemyAttackPattern.CHASE;
     
-    // Start introducing big shooters from wave 5, with low probability
-    if (currentWave >= 5) {
+    // Start introducing dash worms from wave 4, with moderate probability
+    if (currentWave >= 4) {
+      const dashWormChance = Math.min(0.15 + (currentWave - 4) * 0.05, 0.3); // Max 30% dash worms
+      if (Math.random() < dashWormChance) {
+        attackPattern = EnemyAttackPattern.DASH_WORM;
+      }
+    }
+    
+    // Start introducing big shooters from wave 5, with low probability (but not if dash worm was selected)
+    if (attackPattern === EnemyAttackPattern.CHASE && currentWave >= 5) {
       const bigShooterChance = Math.min(0.2 + (currentWave - 5) * 0.05, 0.4); // Max 40% big shooters
       if (Math.random() < bigShooterChance) {
         attackPattern = EnemyAttackPattern.BIG_SHOOTER;
       }
     }
     
-    // Start introducing circle-shooters from wave 3 (but not if big shooter was selected)
+    // Start introducing circle-shooters from wave 3 (but not if other special types were selected)
     if (attackPattern === EnemyAttackPattern.CHASE && currentWave >= 3) {
       const circleChance = Math.min(0.3 + (currentWave - 3) * 0.1, 0.6); // Max 60% circle enemies
       if (Math.random() < circleChance) {
@@ -457,6 +566,14 @@ export class GameManager {
     
     // Reset UI (this will create fresh counters)
     this.uiManager = new UIManager(this.stage, this.viewportManager);
+    
+    // Reset wave trigger zone
+    this.waveTriggerZone.destroy();
+    this.waveTriggerZone = new WaveTriggerZone(this.stage, this.viewportManager);
+    
+    // Reset health trading zone
+    this.healthTradingZone.destroy();
+    this.healthTradingZone = new HealthTradingZone(this.stage, this.viewportManager);
     
     // Unpause
     this.isPaused = false;
