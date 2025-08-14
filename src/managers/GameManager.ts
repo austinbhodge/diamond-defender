@@ -8,6 +8,7 @@ import { Phaser } from '@entities/weapons/Phaser';
 import { Kick } from '@entities/weapons/Kick';
 import { WaveTriggerZone } from '@entities/WaveTriggerZone';
 import { HealthTradingZone } from '@entities/HealthTradingZone';
+import { ShopZone } from '@entities/ShopZone';
 import { InputManager } from './InputManager';
 import { WaveManager, EnemySpawnInfo } from './WaveManager';
 import { UIManager } from './UIManager';
@@ -31,6 +32,7 @@ export class GameManager {
   private viewportManager: ViewportManager;
   private waveTriggerZone: WaveTriggerZone;
   private healthTradingZone: HealthTradingZone;
+  private shopZone: ShopZone;
   
   private isPaused: boolean = false;
   private currentWeaponIndex: number = 0;
@@ -86,6 +88,9 @@ export class GameManager {
     // Initialize health trading zone
     this.healthTradingZone = new HealthTradingZone(this.stage, this.viewportManager);
     
+    // Initialize shop zone
+    this.shopZone = new ShopZone(this.stage, this.viewportManager);
+    
     // Show trigger zone initially for testing - will be hidden when first wave starts
     this.waveTriggerZone.show();
     
@@ -117,6 +122,10 @@ export class GameManager {
     this.healthTradingZone.updatePosition();
     this.healthTradingZone.update();
     
+    // Update shop zone
+    this.shopZone.updatePosition();
+    this.shopZone.update();
+    
     // Check wave trigger zone collision
     if (this.waveManager.isInRestPeriod() && this.waveTriggerZone.isVisible()) {
       if (this.waveTriggerZone.checkCollision(this.player.getPosition())) {
@@ -146,6 +155,30 @@ export class GameManager {
           this.totalExperience -= experienceCost;
           this.player.addHealth(healthGain);
           this.healthTradingZone.resetTradingTimer();
+        }
+      }
+    }
+    
+    // Check shop zone collision
+    if (this.waveManager.isInRestPeriod() && this.shopZone.isVisible()) {
+      const playerPos = this.player.getPosition();
+      const isInZone = this.shopZone.checkCollision(playerPos);
+      
+      // Update zone state
+      this.shopZone.setPlayerInZone(isInZone);
+      
+      // Update slot affordability based on current experience
+      this.shopZone.updateSlotAffordability(this.totalExperience);
+      
+      // Handle shop purchases
+      if (isInZone) {
+        const purchase = this.shopZone.checkSlotPurchase(playerPos, this.totalExperience);
+        if (purchase) {
+          // Perform the purchase
+          this.totalExperience -= purchase.item.cost;
+          console.log(`Purchased ${purchase.item.name} for ${purchase.item.cost} XP. Remaining: ${this.totalExperience}`);
+          
+          // TODO: Apply item effects when item system is implemented
         }
       }
     }
@@ -455,12 +488,14 @@ export class GameManager {
     this.uiManager.showWaveStartPopup(this.waveManager.getCurrentWave());
     this.waveTriggerZone.hide(); // Hide trigger zone when wave starts
     this.healthTradingZone.hide(); // Hide health trading zone when wave starts
+    this.shopZone.hide(); // Hide shop zone when wave starts
   }
 
   private onWaveComplete(): void {
     this.uiManager.showWaveCompletePopup();
     this.waveTriggerZone.show(); // Show trigger zone when wave completes
     this.healthTradingZone.show(); // Show health trading zone when wave completes
+    this.shopZone.show(); // Show shop zone when wave completes
   }
 
   private onEnemySpawn(spawnInfo: EnemySpawnInfo): void {
@@ -574,6 +609,10 @@ export class GameManager {
     // Reset health trading zone
     this.healthTradingZone.destroy();
     this.healthTradingZone = new HealthTradingZone(this.stage, this.viewportManager);
+    
+    // Reset shop zone
+    this.shopZone.destroy();
+    this.shopZone = new ShopZone(this.stage, this.viewportManager);
     
     // Unpause
     this.isPaused = false;

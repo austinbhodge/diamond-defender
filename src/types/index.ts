@@ -147,6 +147,7 @@ export interface GameConfig {
     fadeDuration: number;
   };
   waves: WaveConfig;
+  shop: ShopConfig;
 }
 
 export interface WaveConfig {
@@ -215,4 +216,18 @@ export interface FontConfig {
   medium: number;
   large: number;
   xlarge: number;
+}
+
+export interface ShopItem {
+  id: string;
+  name: string;
+  cost: number;
+  color: string;
+}
+
+export interface ShopConfig {
+  items: ShopItem[];
+  zoneSize: { width: number; height: number };
+  slotSize: number;
+  position: { x: number; y: number };
 }

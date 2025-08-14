@@ -112,5 +112,15 @@ export const gameConfig: GameConfig = {
       speedMultiplier: 1.1 // 10% speed increase per wave
     },
     pointsPerKill: 10 // 10 points per enemy killed
+  },
+  shop: {
+    items: [
+      { id: 'item1', name: 'Red Upgrade', cost: 10, color: '#ff4444' },
+      { id: 'item2', name: 'Blue Upgrade', cost: 15, color: '#4444ff' },
+      { id: 'item3', name: 'Green Upgrade', cost: 20, color: '#44ff44' }
+    ],
+    zoneSize: { width: 180, height: 80 },
+    slotSize: 40,
+    position: { x: 0.5, y: 0.25 } // Relative positioning (50% width, 25% height)
   }
 };
