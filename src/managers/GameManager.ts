@@ -293,6 +293,7 @@ export class GameManager {
             return;
           }
         }
+        
       }
       
       // Check enemy projectile-player collisions
@@ -450,10 +451,11 @@ export class GameManager {
       (spawnInfo: EnemySpawnInfo) => this.onEnemySpawn(spawnInfo)
     );
     
-    // Hide game over screen
+    // Hide game over screen and cleanup old UI
     this.uiManager.hideGameOverScreen();
+    this.uiManager.destroy();
     
-    // Reset UI
+    // Reset UI (this will create fresh counters)
     this.uiManager = new UIManager(this.stage, this.viewportManager);
     
     // Unpause

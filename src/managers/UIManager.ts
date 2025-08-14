@@ -345,6 +345,27 @@ export class UIManager implements GameObject {
       this.gameOverContainer = null;
     }
   }
+  
+  public resetCounters(): void {
+    // Reset to initial state: Wave 1, 0 enemies
+    this.updateWaveCircles(1);
+    this.updateEnemyCircles(0);
+  }
+  
+  public destroy(): void {
+    // Clean up all UI elements
+    if (this.waveContainer) this.stage.removeChild(this.waveContainer);
+    if (this.enemyContainer) this.stage.removeChild(this.enemyContainer);
+    if (this.timerDisplay) this.stage.removeChild(this.timerDisplay);
+    if (this.healthBackground) this.stage.removeChild(this.healthBackground);
+    if (this.healthFill) this.stage.removeChild(this.healthFill);
+    if (this.healthBorder) this.stage.removeChild(this.healthBorder);
+    if (this.ammoBackground) this.stage.removeChild(this.ammoBackground);
+    if (this.ammoFill) this.stage.removeChild(this.ammoFill);
+    if (this.ammoBorder) this.stage.removeChild(this.ammoBorder);
+    if (this.gameOverContainer) this.stage.removeChild(this.gameOverContainer);
+    if (this.wavePopup) this.stage.removeChild(this.wavePopup);
+  }
 
   public showWaveCompletePopup(): void {
     // Remove existing popup if any

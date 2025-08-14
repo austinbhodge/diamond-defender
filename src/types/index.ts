@@ -29,7 +29,8 @@ export enum WeaponType {
 export enum EnemyAttackPattern {
   CHASE = 'chase',
   CIRCLE_SHOOT = 'circle_shoot',
-  BIG_SHOOTER = 'big_shooter'
+  BIG_SHOOTER = 'big_shooter',
+  SWIPE = 'swipe'
 }
 
 export interface WeaponProjectile {

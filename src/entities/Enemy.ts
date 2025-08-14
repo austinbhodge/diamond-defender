@@ -3,6 +3,7 @@ import { GameEntity, Position, Velocity, EnemyAttackPattern } from '@types';
 import { gameConfig } from '@config/gameConfig';
 import { Player } from './Player';
 import { EnemyProjectile } from './EnemyProjectile';
+import { SwipeAttack } from './weapons/SwipeAttack';
 
 export class Enemy implements GameEntity {
   public shape: createjs.Shape;
@@ -31,6 +32,13 @@ export class Enemy implements GameEntity {
   private healthBarBorder: createjs.Shape | null = null;
   private healthBarVisible: boolean = false;
   private lastDamageTime: number = 0;
+
+  // Swipe attack properties
+  private swipeAttack: SwipeAttack | null = null;
+  private lastSwipeTime: number = 0;
+  private swipeRange: number = 42; // Distance at which to trigger swipe
+  private swipeCooldown: number = 3; // 3 seconds between swipes
+  private hasSwipeHitPlayer: boolean = false; // Track if current swipe has hit player
 
   constructor(stage: createjs.Stage, player: Player, x: number = 0, y: number = 0, hp?: number, speed?: number, attackPattern: EnemyAttackPattern = EnemyAttackPattern.CHASE) {
     this.stage = stage;
@@ -65,6 +73,11 @@ export class Enemy implements GameEntity {
     this.shape.y = y;
     
     stage.addChild(this.shape);
+    
+    // Initialize swipe attack for CHASE pattern enemies
+    if (attackPattern === EnemyAttackPattern.CHASE) {
+      this.swipeAttack = new SwipeAttack(stage);
+    }
   }
 
   public update(): void {
@@ -78,6 +91,28 @@ export class Enemy implements GameEntity {
     
     this.updatePosition();
     this.updateProjectiles();
+    
+    // Update swipe attack if present
+    if (this.swipeAttack) {
+      this.swipeAttack.updatePosition(this.position);
+      this.swipeAttack.update();
+      
+      // Check for player collision with swipe attack
+      if (this.swipeAttack.isActive() && !this.hasSwipeHitPlayer) {
+        const playerPos = this.player.getPosition();
+        if (this.swipeAttack.checkPlayerCollision(playerPos)) {
+          // Apply swipe damage to player
+          const swipeDamage = this.swipeAttack.getDamage();
+          this.player.takeDamage(swipeDamage);
+          this.hasSwipeHitPlayer = true; // Prevent multiple hits from same swipe
+        }
+      }
+      
+      // Reset hit flag when swipe is no longer active
+      if (!this.swipeAttack.isActive()) {
+        this.hasSwipeHitPlayer = false;
+      }
+    }
     
     // Update shape position
     this.shape.x = this.position.x;
@@ -121,6 +156,16 @@ export class Enemy implements GameEntity {
     // Calculate rotation angle based on movement direction
     if (this.velocity.x !== 0 || this.velocity.y !== 0) {
       this.angle = Math.atan2(this.velocity.y, this.velocity.x) * (180 / Math.PI) + 90;
+    }
+    
+    // Check for swipe attack opportunity
+    if (this.swipeAttack && distance <= this.swipeRange && distance > 0) {
+      const currentTime = Date.now() / 1000;
+      if (currentTime - this.lastSwipeTime >= this.swipeCooldown) {
+        this.swipeAttack.trigger(this.position, playerPos);
+        this.lastSwipeTime = currentTime;
+        this.hasSwipeHitPlayer = false; // Reset hit flag for new swipe
+      }
     }
   }
 
@@ -178,6 +223,12 @@ export class Enemy implements GameEntity {
     
     // Clean up health bar
     this.destroyHealthBar();
+    
+    // Clean up swipe attack
+    if (this.swipeAttack) {
+      this.swipeAttack.destroy();
+      this.swipeAttack = null;
+    }
     
     // Return the position before destroying for orb spawning
     const deathPosition = { ...this.position };
@@ -392,6 +443,10 @@ export class Enemy implements GameEntity {
     } else {
       return 7; // Default chase enemy size
     }
+  }
+
+  public getSwipeAttack(): SwipeAttack | null {
+    return this.swipeAttack;
   }
 
   // Health bar methods
