@@ -136,7 +136,7 @@ export class HealthTradingZone implements GameObject {
     }
   }
 
-  public isPlayerInZone(): boolean {
+  public getIsPlayerInZone(): boolean {
     return this.isPlayerInZone;
   }
 

@@ -51,6 +51,7 @@ export interface ViewportConfig {
 export interface ResponsiveUILayout {
   waveDisplay: { x: number; y: number; anchor: { x: string; y: string } };
   enemyCounter: { x: number; y: number; anchor: { x: string; y: string } };
+  experienceCounter: { x: number; y: number; anchor: { x: string; y: string } };
   timerDisplay: { x: number; y: number; anchor: { x: string; y: string } };
   healthBar: { x: number; y: number; width: number; height: number };
   ammoBar: { x: number; y: number; width: number; height: number };
