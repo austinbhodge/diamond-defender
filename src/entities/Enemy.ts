@@ -46,6 +46,9 @@ export class Enemy implements GameEntity {
   private hitFlashTimer: number = 0;
   private particleSystem: ParticleSystem | null = null;
 
+  // Visual seed for procedural variation
+  private visualSeed: number;
+
   // Dash worm properties
   private segments: createjs.Shape[] = [];
   private connectors: createjs.Shape[] = [];
@@ -87,7 +90,10 @@ export class Enemy implements GameEntity {
     
     this.acceleration = gameConfig.enemy.acceleration;
     this.desiredRadius = gameConfig.enemy.circleAttack.radius;
-    
+
+    // Generate unique visual seed for procedural variation
+    this.visualSeed = Math.floor(Math.random() * 100000);
+
     // Set random starting angle for circle pattern
     this.circleAngle = Math.random() * Math.PI * 2;
     
@@ -304,12 +310,12 @@ export class Enemy implements GameEntity {
   private createVisual(flash: boolean = false): void {
     this.shape.graphics.clear();
     if (this.attackPattern === EnemyAttackPattern.CHASE) {
-      ShipRenderers.drawChaseEnemy(this.shape.graphics, flash);
+      ShipRenderers.drawChaseEnemy(this.shape.graphics, flash, this.visualSeed);
     } else if (this.attackPattern === EnemyAttackPattern.CIRCLE_SHOOT) {
-      ShipRenderers.drawCircleShootEnemy(this.shape.graphics, flash);
+      ShipRenderers.drawCircleShootEnemy(this.shape.graphics, flash, this.visualSeed);
     } else if (this.attackPattern === EnemyAttackPattern.BIG_SHOOTER) {
       const size = gameConfig.enemy.bigShooter.size;
-      ShipRenderers.drawBigShooter(this.shape.graphics, size, flash);
+      ShipRenderers.drawBigShooter(this.shape.graphics, size, flash, this.visualSeed);
     } else if (this.attackPattern === EnemyAttackPattern.DASH_WORM) {
       // Invisible main shape — segments are the visual
       this.shape.graphics
@@ -383,7 +389,7 @@ export class Enemy implements GameEntity {
 
       if (i === 0) {
         // Head — pentagon with mandibles and eyes
-        ShipRenderers.drawWormHead(segment.graphics, config.headSize);
+        ShipRenderers.drawWormHead(segment.graphics, config.headSize, false, this.visualSeed);
       } else {
         // Body segments — hexagonal
         const alpha = 1 - (i * 0.15);

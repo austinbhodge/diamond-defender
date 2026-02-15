@@ -14,9 +14,9 @@ import { InputManager } from './InputManager';
 import { WaveManager, EnemySpawnInfo } from './WaveManager';
 import { UIManager } from './UIManager';
 import { gameConfig } from '@config/gameConfig';
-import { WeaponType, ShopEffectType, ShopItem, EnemyAttackPattern } from '@types';
+import { WeaponType, ShopEffectType, ShopItem, EnemyAttackPattern, UpgradeSnapshot } from '@types';
 import { ViewportManager } from '@utils/viewport';
-import { StarfieldBackground, ParticleSystem, ScreenShake } from '@rendering/index';
+import { StarfieldBackground, ParticleSystem, ScreenShake, ShipRenderers } from '@rendering/index';
 
 export class GameManager {
   private stage: createjs.Stage;
@@ -73,6 +73,11 @@ export class GameManager {
     // Initialize rendering systems
     this.starfield = new StarfieldBackground(this.stage, canvas.width, canvas.height);
     this.screenShake = new ScreenShake(this.stage);
+
+    // Rebuild starfield when viewport resizes
+    this.viewportManager.onResize((dims) => {
+      this.starfield.resize(dims.width, dims.height);
+    });
 
     // Initialize input manager
     this.inputManager = new InputManager(this.stage);
@@ -297,7 +302,9 @@ export class GameManager {
     const currentTime = Date.now() / 1000;
     if (this.inputManager.isKeyPressed('KeyE') && (currentTime - this.lastWeaponSwitch) > 0.3) {
       this.currentWeaponIndex = (this.currentWeaponIndex + 1) % this.weaponTypes.length;
-      this.phaser.setType(this.weaponTypes[this.currentWeaponIndex]);
+      const nextWeapon = this.weaponTypes[this.currentWeaponIndex];
+      this.phaser.setType(nextWeapon);
+      this.player.setWeaponType(nextWeapon);
       this.lastWeaponSwitch = currentTime;
     }
 
@@ -338,8 +345,27 @@ export class GameManager {
     if (index !== -1) {
       this.currentWeaponIndex = index;
       this.phaser.setType(type);
+      this.player.setWeaponType(type);
       this.lastWeaponSwitch = Date.now() / 1000;
     }
+  }
+
+  private buildUpgradeSnapshot(): UpgradeSnapshot {
+    const bs = this.upgradeManager.getPurchaseCount(ShopEffectType.BULLET_SPEED);
+    const fr = this.upgradeManager.getPurchaseCount(ShopEffectType.FIRE_RATE);
+    const eb = this.upgradeManager.getPurchaseCount(ShopEffectType.EXTRA_BULLETS);
+    const ms = this.upgradeManager.getPurchaseCount(ShopEffectType.MOVE_SPEED);
+    const mh = this.upgradeManager.getPurchaseCount(ShopEffectType.MAX_HEALTH);
+    const mr = this.upgradeManager.getPurchaseCount(ShopEffectType.MAGNET_RANGE);
+    return {
+      bulletSpeed: bs,
+      fireRate: fr,
+      extraBullets: eb,
+      moveSpeed: ms,
+      maxHealth: mh,
+      magnetRange: mr,
+      totalUpgrades: bs + fr + eb + ms + mh + mr,
+    };
   }
 
   private applyUpgradeEffects(item: ShopItem): void {
@@ -381,6 +407,9 @@ export class GameManager {
         }
         break;
     }
+
+    // Update player's visual upgrade snapshot
+    this.player.setUpgradeSnapshot(this.buildUpgradeSnapshot());
   }
 
   private updateEnemies(): void {
@@ -747,6 +776,9 @@ export class GameManager {
 
     // Reset upgrade manager
     this.upgradeManager.reset();
+
+    // Clear blueprint cache for fresh visuals
+    ShipRenderers.clearCache();
 
     // Unpause
     this.isPaused = false;

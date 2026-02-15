@@ -6,7 +6,8 @@
       "Bash(npm run type-check:*)",
       "Bash(find:*)",
       "Bash(npm run build:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git checkout:*)"
     ],
     "deny": []
   }

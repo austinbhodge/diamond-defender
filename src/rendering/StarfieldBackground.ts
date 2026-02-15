@@ -13,6 +13,8 @@ interface StarLayer {
 export class StarfieldBackground {
   private container: createjs.Container;
   private layers: StarLayer[] = [];
+  private backgroundFill: createjs.Shape;
+  private nebulaShape: createjs.Shape | null = null;
   private canvasWidth: number;
   private canvasHeight: number;
 
@@ -20,6 +22,11 @@ export class StarfieldBackground {
     this.canvasWidth = canvasWidth;
     this.canvasHeight = canvasHeight;
     this.container = new createjs.Container();
+
+    // Solid background fill so the canvas is never transparent/empty
+    this.backgroundFill = new createjs.Shape();
+    this.drawBackgroundFill();
+    this.container.addChild(this.backgroundFill);
 
     // Add nebula layer (static, very low alpha)
     this.createNebulaLayer();
@@ -31,6 +38,13 @@ export class StarfieldBackground {
 
     // Insert container behind all gameplay
     stage.addChildAt(this.container, 0);
+  }
+
+  private drawBackgroundFill(): void {
+    this.backgroundFill.graphics.clear()
+      .beginFill('#000811')
+      .drawRect(0, 0, this.canvasWidth, this.canvasHeight);
+    this.backgroundFill.cache(0, 0, this.canvasWidth, this.canvasHeight);
   }
 
   private createNebulaLayer(): void {
@@ -50,6 +64,7 @@ export class StarfieldBackground {
     }
 
     shape.cache(0, 0, this.canvasWidth, this.canvasHeight);
+    this.nebulaShape = shape;
     this.container.addChild(shape);
   }
 
@@ -61,9 +76,9 @@ export class StarfieldBackground {
     alphaMax: number,
     parallaxFactor: number
   ): void {
-    // Make layer 1.5x canvas size for seamless wrapping
-    const layerWidth = Math.ceil(this.canvasWidth * 1.5);
-    const layerHeight = Math.ceil(this.canvasHeight * 1.5);
+    // Make layer 2x canvas size so wrapping always covers the visible area
+    const layerWidth = Math.ceil(this.canvasWidth * 2);
+    const layerHeight = Math.ceil(this.canvasHeight * 2);
 
     const shape = new createjs.Shape();
     const g = shape.graphics;
@@ -98,14 +113,38 @@ export class StarfieldBackground {
       layer.offsetX -= playerVelocity.x * layer.parallaxFactor;
       layer.offsetY -= playerVelocity.y * layer.parallaxFactor;
 
-      // Wrap via modulo to keep within bounds
-      layer.offsetX = ((layer.offsetX % layer.width) + layer.width) % layer.width;
-      layer.offsetY = ((layer.offsetY % layer.height) + layer.height) % layer.height;
+      // Wrap at canvas dimensions (not layer dimensions) for seamless tiling
+      layer.offsetX = ((layer.offsetX % this.canvasWidth) + this.canvasWidth) % this.canvasWidth;
+      layer.offsetY = ((layer.offsetY % this.canvasHeight) + this.canvasHeight) % this.canvasHeight;
 
-      // Position the shape so it tiles seamlessly
-      layer.shape.x = layer.offsetX - layer.width + this.canvasWidth;
-      layer.shape.y = layer.offsetY - layer.height + this.canvasHeight;
+      // Position so the 2x-sized layer always covers [0, canvasWidth/Height]
+      layer.shape.x = layer.offsetX - this.canvasWidth;
+      layer.shape.y = layer.offsetY - this.canvasHeight;
     }
+  }
+
+  public resize(newWidth: number, newHeight: number): void {
+    this.canvasWidth = newWidth;
+    this.canvasHeight = newHeight;
+
+    // Redraw background fill to new size
+    this.drawBackgroundFill();
+
+    // Remove old nebula and star layers
+    if (this.nebulaShape) {
+      this.container.removeChild(this.nebulaShape);
+      this.nebulaShape = null;
+    }
+    for (const layer of this.layers) {
+      this.container.removeChild(layer.shape);
+    }
+    this.layers = [];
+
+    // Recreate
+    this.createNebulaLayer();
+    this.createStarLayer(120, 0.5, 1.0, 0.2, 0.4, 0.05);
+    this.createStarLayer(60,  1.0, 2.0, 0.4, 0.7, 0.15);
+    this.createStarLayer(20,  2.0, 3.0, 0.7, 1.0, 0.3);
   }
 
   public reset(): void {

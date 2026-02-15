@@ -291,6 +291,15 @@ export interface PurchasedItem {
   stackPosition: number;
 }
 
+// Re-export rendering types
+export type {
+  PolyContour,
+  DrawLayer,
+  ShipBlueprint,
+  ColorPalette,
+  UpgradeSnapshot
+} from './rendering';
+
 export interface ParticleEmitConfig {
   x: number;
   y: number;

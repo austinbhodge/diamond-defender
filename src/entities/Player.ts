@@ -1,5 +1,5 @@
 import * as createjs from '@thegraid/createjs-module';
-import { GameEntity, Position, Velocity } from '@types';
+import { GameEntity, Position, Velocity, WeaponType, UpgradeSnapshot } from '@types';
 import { gameConfig } from '@config/gameConfig';
 import { ShipRenderers } from '@rendering/ShipRenderers';
 import { ParticleSystem } from '@rendering/ParticleSystem';
@@ -26,6 +26,13 @@ export class Player implements GameEntity {
 
   // Speed multiplier from upgrades
   private speedMultiplier: number = 1.0;
+
+  // Visual state for procedural ship rendering
+  private currentWeaponType: WeaponType = WeaponType.LASER;
+  private upgradeSnapshot: UpgradeSnapshot = {
+    bulletSpeed: 0, fireRate: 0, extraBullets: 0,
+    moveSpeed: 0, maxHealth: 0, magnetRange: 0, totalUpgrades: 0,
+  };
 
   constructor(stage: createjs.Stage, x: number, y: number) {
     this.stage = stage;
@@ -268,12 +275,20 @@ export class Player implements GameEntity {
     this.currentHealth = Math.round(newMax * ratio);
   }
 
+  public setWeaponType(type: WeaponType): void {
+    this.currentWeaponType = type;
+  }
+
+  public setUpgradeSnapshot(snapshot: UpgradeSnapshot): void {
+    this.upgradeSnapshot = snapshot;
+  }
+
   private updateVisualEffects(): void {
     const isFlashing = this.damageFlashTimer > 0;
 
-    // Redraw ship with appropriate flash state
+    // Redraw ship with appropriate flash state, weapon module, and upgrade visuals
     this.shape.graphics.clear();
-    ShipRenderers.drawPlayer(this.shape.graphics, isFlashing);
+    ShipRenderers.drawPlayer(this.shape.graphics, isFlashing, this.currentWeaponType, this.upgradeSnapshot);
 
     // Semi-transparent when invulnerable (and not flashing)
     if (!isFlashing && this.isInvulnerable) {
