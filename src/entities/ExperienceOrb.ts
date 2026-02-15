@@ -2,6 +2,7 @@ import * as createjs from '@thegraid/createjs-module';
 import { GameEntity, Position, Velocity } from '../types/index';
 import { gameConfig } from '@config/gameConfig';
 import { Player } from './Player';
+import { ParticleSystem } from '@rendering/ParticleSystem';
 
 export class ExperienceOrb implements GameEntity {
   public shape: createjs.Shape;
@@ -14,6 +15,7 @@ export class ExperienceOrb implements GameEntity {
   private baseSpeed: number;
   private glowAnimation: number = 0;
   private collected: boolean = false;
+  private particleSystem: ParticleSystem | null = null;
   
   constructor(stage: createjs.Stage, player: Player, x: number, y: number, experienceValue?: number) {
     this.stage = stage;
@@ -101,10 +103,19 @@ export class ExperienceOrb implements GameEntity {
       .drawCircle(0, 0, 2);
   }
   
+  public setParticleSystem(ps: ParticleSystem): void {
+    this.particleSystem = ps;
+  }
+
   public collect(): void {
     if (this.collected) return;
-    
+
     this.collected = true;
+
+    // Emit collection sparkle
+    if (this.particleSystem) {
+      this.particleSystem.emitXPCollect(this.position.x, this.position.y);
+    }
     
     // Create collection animation (quick scale up and fade out)
     createjs.Tween.get(this.shape)

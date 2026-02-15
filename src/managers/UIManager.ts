@@ -1,7 +1,9 @@
 import * as createjs from '@thegraid/createjs-module';
-import { GameObject, WaveData, WaveState, HealthBarElements, HealthBarConfig, WeaponType } from '@types';
+import { GameObject, WaveData, WaveState, HealthBarElements, HealthBarConfig, WeaponType, ShopItem, Position } from '@types';
 import { ViewportManager, ViewportDimensions } from '@utils/viewport';
 import { gameConfig } from '@config/gameConfig';
+import { PurchasedItemsDisplay } from '@entities/PurchasedItemsDisplay';
+import { Tooltip } from '@ui/Tooltip';
 
 export class UIManager implements GameObject {
   private stage: createjs.Stage;
@@ -41,11 +43,30 @@ export class UIManager implements GameObject {
   
   // Game over screen
   private gameOverContainer: createjs.Container | null = null;
+  
+  // Purchased items display
+  private purchasedItemsDisplay: PurchasedItemsDisplay;
+  
+  // Tooltips
+  private healthTooltip?: Tooltip;
+  private ammoTooltip?: Tooltip;
+  private experienceTooltip?: Tooltip;
+  private mousePosition: Position = { x: 0, y: 0 };
+  private hoveredElement: 'health' | 'ammo' | 'experience' | null = null;
 
   constructor(stage: createjs.Stage, viewportManager: ViewportManager) {
     this.stage = stage;
     this.viewportManager = viewportManager;
     this.createUIElements();
+    
+    // Initialize purchased items display
+    this.purchasedItemsDisplay = new PurchasedItemsDisplay(stage, viewportManager);
+    
+    // Create tooltips
+    this.createTooltips();
+    
+    // Set up direct stage mouse tracking for better tooltip responsiveness
+    this.setupMouseTracking();
     
     // Listen for viewport changes
     this.viewportManager.onResize((dimensions) => {
@@ -97,12 +118,59 @@ export class UIManager implements GameObject {
     // Create ammo bar
     this.createAmmoBar();
   }
+  
+  private setupMouseTracking(): void {
+    // Use stage's stagemousemove event for real-time mouse tracking
+    this.stage.on('stagemousemove', (event: any) => {
+      if (event.stageX !== undefined && event.stageY !== undefined) {
+        this.mousePosition = { x: event.stageX, y: event.stageY };
+      }
+    });
+  }
+  
+  private createTooltips(): void {
+    // Create health tooltip
+    this.healthTooltip = new Tooltip(this.stage, {
+      text: 'Health',
+      description: 'Your current health points',
+      position: 'top',
+      offset: 10,
+      maxWidth: 150,
+      fontSize: 11
+    });
+    
+    // Create ammo tooltip
+    this.ammoTooltip = new Tooltip(this.stage, {
+      text: 'Ammo',
+      description: 'Current weapon ammunition',
+      position: 'top',
+      offset: 10,
+      maxWidth: 150,
+      fontSize: 11
+    });
+    
+    // Create experience tooltip
+    this.experienceTooltip = new Tooltip(this.stage, {
+      text: 'Experience',
+      description: 'Spend at the shop between waves',
+      position: 'bottom',
+      offset: 10,
+      maxWidth: 180,
+      fontSize: 11
+    });
+  }
 
   public update(): void {
     // Update low health warning animation
     const deltaTime = 1 / 60; // Assume 60 FPS for UI updates
     this.lowHealthFlashTimer += deltaTime;
+    
+    // Update purchased items display
+    this.purchasedItemsDisplay.update();
     this.lowAmmoFlashTimer += deltaTime;
+    
+    // Update tooltips
+    this.updateTooltips(deltaTime);
     
     if (this.lowHealthWarning) {
       // Flash cycle every 0.8 seconds
@@ -406,6 +474,14 @@ export class UIManager implements GameObject {
     this.stage.addChild(this.gameOverContainer);
   }
   
+  public addPurchasedItem(item: ShopItem): void {
+    this.purchasedItemsDisplay.addPurchasedItem(item);
+  }
+  
+  public clearPurchasedItems(): void {
+    this.purchasedItemsDisplay.clear();
+  }
+  
   public hideGameOverScreen(): void {
     if (this.gameOverContainer) {
       createjs.Tween.removeTweens(this.gameOverContainer);
@@ -421,7 +497,99 @@ export class UIManager implements GameObject {
     this.updateExperienceCircles(0);
   }
   
+  private updateTooltips(deltaTime: number): void {
+    // Check hover state for each UI element
+    const dims = this.viewportManager.getDimensions();
+    let newHoveredElement: 'health' | 'ammo' | 'experience' | null = null;
+    const padding = 10; // Add padding for easier hovering
+    
+    // Check health bar hover
+    const healthBarBounds = {
+      x: dims.width * gameConfig.ui.healthBar.x / 100 - padding,
+      y: dims.height * gameConfig.ui.healthBar.y / 100 - padding,
+      width: gameConfig.ui.healthBar.width + padding * 2,
+      height: gameConfig.ui.healthBar.height + padding * 2
+    };
+    
+    if (this.isMouseOverElement(healthBarBounds)) {
+      newHoveredElement = 'health';
+    }
+    
+    // Check ammo bar hover
+    const ammoBarBounds = {
+      x: dims.width * gameConfig.ui.ammoBar.x / 100 - gameConfig.ui.ammoBar.width - padding,
+      y: dims.height * gameConfig.ui.ammoBar.y / 100 - padding,
+      width: gameConfig.ui.ammoBar.width + padding * 2,
+      height: gameConfig.ui.ammoBar.height + padding * 2
+    };
+    
+    if (this.isMouseOverElement(ammoBarBounds)) {
+      newHoveredElement = 'ammo';
+    }
+    
+    // Check experience counter hover
+    const expBounds = {
+      x: dims.width * gameConfig.ui.experienceCounter.x / 100 - 50 - padding,
+      y: dims.height * gameConfig.ui.experienceCounter.y / 100 - padding,
+      width: 100 + padding * 2,
+      height: 20 + padding * 2
+    };
+    
+    if (this.isMouseOverElement(expBounds)) {
+      newHoveredElement = 'experience';
+    }
+    
+    // Update tooltip visibility
+    if (newHoveredElement !== this.hoveredElement) {
+      // Hide previous tooltip
+      if (this.hoveredElement === 'health') this.healthTooltip?.hide();
+      if (this.hoveredElement === 'ammo') this.ammoTooltip?.hide();
+      if (this.hoveredElement === 'experience') this.experienceTooltip?.hide();
+      
+      // Show new tooltip
+      if (newHoveredElement === 'health') {
+        const pos = { 
+          x: healthBarBounds.x + healthBarBounds.width / 2, 
+          y: healthBarBounds.y 
+        };
+        this.healthTooltip?.show(pos);
+      } else if (newHoveredElement === 'ammo') {
+        const pos = { 
+          x: ammoBarBounds.x + ammoBarBounds.width / 2, 
+          y: ammoBarBounds.y 
+        };
+        this.ammoTooltip?.show(pos);
+      } else if (newHoveredElement === 'experience') {
+        const pos = { 
+          x: expBounds.x + expBounds.width / 2, 
+          y: expBounds.y + expBounds.height 
+        };
+        this.experienceTooltip?.show(pos);
+      }
+      
+      this.hoveredElement = newHoveredElement;
+    }
+    
+    // Update tooltip animations
+    this.healthTooltip?.update(deltaTime);
+    this.ammoTooltip?.update(deltaTime);
+    this.experienceTooltip?.update(deltaTime);
+  }
+  
+  private isMouseOverElement(bounds: { x: number; y: number; width: number; height: number }): boolean {
+    return this.mousePosition.x >= bounds.x &&
+           this.mousePosition.x <= bounds.x + bounds.width &&
+           this.mousePosition.y >= bounds.y &&
+           this.mousePosition.y <= bounds.y + bounds.height;
+  }
+  
+  
   public destroy(): void {
+    // Clean up tooltips
+    this.healthTooltip?.destroy();
+    this.ammoTooltip?.destroy();
+    this.experienceTooltip?.destroy();
+    
     // Clean up all UI elements
     if (this.waveContainer) this.stage.removeChild(this.waveContainer);
     if (this.enemyContainer) this.stage.removeChild(this.enemyContainer);
@@ -432,6 +600,9 @@ export class UIManager implements GameObject {
     if (this.healthBorder) this.stage.removeChild(this.healthBorder);
     if (this.ammoBackground) this.stage.removeChild(this.ammoBackground);
     if (this.ammoFill) this.stage.removeChild(this.ammoFill);
+    
+    // Clean up purchased items display
+    this.purchasedItemsDisplay.destroy();
     if (this.ammoBorder) this.stage.removeChild(this.ammoBorder);
     if (this.gameOverContainer) this.stage.removeChild(this.gameOverContainer);
     if (this.wavePopup) this.stage.removeChild(this.wavePopup);
@@ -561,6 +732,14 @@ export class UIManager implements GameObject {
     this.currentHealth = currentHealth;
     this.maxHealth = maxHealth;
     
+    // Update health tooltip text
+    if (this.healthTooltip) {
+      this.healthTooltip.setText(
+        'Health',
+        `${Math.round(currentHealth)} / ${maxHealth} HP`
+      );
+    }
+    
     const dims = this.viewportManager.getDimensions();
     
     // Fixed position in bottom left
@@ -650,10 +829,13 @@ export class UIManager implements GameObject {
     if (fillWidth > 0) {
       // Color based on weapon type and ammo percentage
       let fillColor = '#6be9ff'; // Default cyan for laser/dub
-      
+
       if (actualWeaponType === WeaponType.CIRCLE) {
-        // Purple for circle weapon
-        fillColor = '#8a2be2';
+        fillColor = '#8a2be2'; // Purple for circle weapon
+      } else if (actualWeaponType === WeaponType.SCATTER) {
+        fillColor = '#ff6600'; // Orange for scatter
+      } else if (actualWeaponType === WeaponType.HOMING) {
+        fillColor = '#ff00ff'; // Magenta for homing
       } else {
         // Cyan for laser/dub with warning colors
         if (ammoPercentage <= 0.25) {
@@ -682,6 +864,18 @@ export class UIManager implements GameObject {
     this.maxAmmo = maxAmmo;
     if (weaponType) {
       this.currentWeaponType = weaponType;
+    }
+    
+    // Update ammo tooltip text
+    if (this.ammoTooltip) {
+      const weaponName = weaponType === WeaponType.LASER ? 'Laser' :
+                        weaponType === WeaponType.DUB ? 'Dub' :
+                        weaponType === WeaponType.SCATTER ? 'Scatter' :
+                        weaponType === WeaponType.HOMING ? 'Homing' : 'Circle';
+      this.ammoTooltip.setText(
+        `${weaponName} Ammo`,
+        `${Math.round(currentAmmo)} / ${maxAmmo} bullets`
+      );
     }
     
     const dims = this.viewportManager.getDimensions();
@@ -734,6 +928,9 @@ export class UIManager implements GameObject {
     // Recreate health and ammo bars with new dimensions
     this.recreateHealthBar();
     this.recreateAmmoBar();
+    
+    // Update purchased items display position
+    this.purchasedItemsDisplay.updatePosition();
   }
 
   private recreateHealthBar(): void {

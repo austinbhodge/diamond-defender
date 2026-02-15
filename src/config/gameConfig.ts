@@ -1,4 +1,4 @@
-import { GameConfig } from '@types';
+import { GameConfig, ShopEffectType, SpacePortIconType, RenderingConfig } from '@types';
 
 export const gameConfig: GameConfig = {
   canvas: {
@@ -58,7 +58,7 @@ export const gameConfig: GameConfig = {
       dashDuration: 0.3,
       detectionRadius: 80,
       segmentCount: 5,
-      segmentSize: 8  ,
+      segmentSize: 8,
       headSize: 6
     }
   },
@@ -84,43 +84,167 @@ export const gameConfig: GameConfig = {
       maxRadius: 200,
       expandRate: 1,
       decayRate: 100
+    },
+    scatter: {
+      limit: 150,
+      speed: -14,
+      maxAmmo: 100,
+      ammoRegenRate: 1.5,
+      ammoConsumption: 5,
+      shotCooldown: 0.2,
+      projectilesPerShot: 5,
+      spreadAngle: 30
+    },
+    homing: {
+      limit: 30,
+      speed: -8,
+      maxAmmo: 80,
+      ammoRegenRate: 1,
+      ammoConsumption: 4,
+      shotCooldown: 0.35,
+      trackingStrength: 0.08,
+      trackingRange: 200
     }
   },
   experienceOrb: {
-    baseSpeed: 0.5, // Slow drift speed towards player
-    magnetRange: 100, // Distance at which orbs start accelerating
-    magnetSpeed: 4, // Additional speed when in magnetic range
-    collectionRadius: 20, // Distance at which orbs are collected
-    baseValue: 5 // Base experience points per orb
+    baseSpeed: 0.5,
+    magnetRange: 100,
+    magnetSpeed: 4,
+    collectionRadius: 20,
+    baseValue: 5
   },
   enemyHealthBar: {
-    width: 30, // Width of regular enemy health bar
-    height: 4, // Height of regular enemy health bar
-    bigShooterWidth: 40, // Width for big shooter health bar
-    bigShooterHeight: 6, // Height for big shooter health bar
-    offsetY: 15, // Distance above enemy
-    fadeDelay: 2000, // Time before fade starts (ms)
-    fadeDuration: 500 // Fade animation duration (ms)
+    width: 30,
+    height: 4,
+    bigShooterWidth: 40,
+    bigShooterHeight: 6,
+    offsetY: 15,
+    fadeDelay: 2000,
+    fadeDuration: 500
   },
   waves: {
-    restDuration: 15, // 15 seconds rest between waves
-    baseEnemyCount: 3, // Wave 1 starts with 3 enemies
-    enemyScaling: 2, // Each wave adds 2 more enemies
-    spawnDelay: 1.5, // 1.5 seconds between enemy spawns
+    restDuration: 15,
+    baseEnemyCount: 3,
+    enemyScaling: 2,
+    spawnDelay: 1.5,
     difficultyScaling: {
-      hpMultiplier: 1.2, // 20% HP increase per wave
-      speedMultiplier: 1.1 // 10% speed increase per wave
+      hpMultiplier: 1.2,
+      speedMultiplier: 1.1
     },
-    pointsPerKill: 10 // 10 points per enemy killed
+    pointsPerKill: 10
   },
   shop: {
-    items: [
-      { id: 'item1', name: 'Red Upgrade', cost: 10, color: '#ff4444' },
-      { id: 'item2', name: 'Blue Upgrade', cost: 15, color: '#4444ff' },
-      { id: 'item3', name: 'Green Upgrade', cost: 20, color: '#44ff44' }
+    upgradePool: [
+      {
+        id: 'bullet_speed',
+        name: 'Bullet Speed',
+        cost: 10,
+        color: '#4444ff',
+        effect: ShopEffectType.BULLET_SPEED,
+        description: '+20% projectile velocity',
+        category: 'stat',
+        iconType: SpacePortIconType.BULLET_SPEED,
+        scalingCost: 5
+      },
+      {
+        id: 'fire_rate',
+        name: 'Fire Rate',
+        cost: 15,
+        color: '#ff4444',
+        effect: ShopEffectType.FIRE_RATE,
+        description: '-15% shot cooldown',
+        category: 'stat',
+        iconType: SpacePortIconType.FIRE_RATE,
+        scalingCost: 5
+      },
+      {
+        id: 'extra_bullets',
+        name: 'Extra Ammo',
+        cost: 20,
+        color: '#44ff44',
+        effect: ShopEffectType.EXTRA_BULLETS,
+        description: '+25 max ammo',
+        category: 'stat',
+        iconType: SpacePortIconType.EXTRA_BULLETS,
+        scalingCost: 10
+      },
+      {
+        id: 'move_speed',
+        name: 'Thrusters',
+        cost: 15,
+        color: '#ffaa00',
+        effect: ShopEffectType.MOVE_SPEED,
+        description: '+15% movement speed',
+        category: 'stat',
+        iconType: SpacePortIconType.MOVE_SPEED,
+        scalingCost: 10
+      },
+      {
+        id: 'max_health',
+        name: 'Hull Plating',
+        cost: 20,
+        color: '#00cccc',
+        effect: ShopEffectType.MAX_HEALTH,
+        description: '+25 max health',
+        category: 'stat',
+        iconType: SpacePortIconType.MAX_HEALTH,
+        scalingCost: 10
+      },
+      {
+        id: 'magnet_range',
+        name: 'Tractor Beam',
+        cost: 10,
+        color: '#aa44ff',
+        effect: ShopEffectType.MAGNET_RANGE,
+        description: '+50% magnet range',
+        category: 'stat',
+        iconType: SpacePortIconType.MAGNET_RANGE,
+        scalingCost: 5
+      },
+      {
+        id: 'weapon_scatter',
+        name: 'Scatter Cannon',
+        cost: 30,
+        color: '#ff6600',
+        effect: ShopEffectType.WEAPON_SCATTER,
+        description: 'Unlocks scatter shot weapon',
+        category: 'weapon',
+        iconType: SpacePortIconType.SCATTER_GUN,
+        maxPurchases: 1
+      },
+      {
+        id: 'weapon_homing',
+        name: 'Homing Missiles',
+        cost: 35,
+        color: '#ff00ff',
+        effect: ShopEffectType.WEAPON_HOMING,
+        description: 'Unlocks homing missile weapon',
+        category: 'weapon',
+        iconType: SpacePortIconType.HOMING_MISSILE,
+        maxPurchases: 1
+      }
     ],
-    zoneSize: { width: 180, height: 80 },
-    slotSize: 40,
-    position: { x: 0.5, y: 0.25 } // Relative positioning (50% width, 25% height)
+    spacePort: {
+      maxPortsPerRest: 3,
+      portSize: { width: 80, height: 60 },
+      positions: [
+        { x: 250, y: 200 },
+        { x: 700, y: 150 },
+        { x: 1150, y: 200 },
+        { x: 450, y: 350 },
+        { x: 950, y: 350 }
+      ]
+    }
+  }
+};
+
+export const renderingConfig: RenderingConfig = {
+  particles: {
+    poolSize: 200,
+    engineTrail: { count: 3, lifetime: 20, speed: 1.0 },
+    explosion: { count: 15, lifetime: 30, speed: 3.5 },
+    hitSpark: { count: 6, lifetime: 12, speed: 2.0 },
+    xpCollect: { count: 10, lifetime: 18, speed: 2.0 },
+    projectileTrail: { count: 1, lifetime: 10 }
   }
 };

@@ -23,7 +23,9 @@
       "@managers/*": ["src/managers/*"],
       "@types/*": ["src/types/*"],
       "@config/*": ["src/config/*"],
-      "@utils/*": ["src/utils/*"]
+      "@utils/*": ["src/utils/*"],
+      "@ui/*": ["src/ui/*"],
+      "@rendering/*": ["src/rendering/*"]
     }
   },
   "include": ["src/**/*"],

@@ -23,7 +23,9 @@ export interface GameEntity extends GameObject {
 export enum WeaponType {
   LASER = 'laser',
   DUB = 'dub',
-  CIRCLE = 'circle'
+  CIRCLE = 'circle',
+  SCATTER = 'scatter',
+  HOMING = 'homing'
 }
 
 export enum EnemyAttackPattern {
@@ -129,6 +131,26 @@ export interface GameConfig {
       expandRate: number;
       decayRate: number;
     };
+    scatter: {
+      limit: number;
+      speed: number;
+      maxAmmo: number;
+      ammoRegenRate: number;
+      ammoConsumption: number;
+      shotCooldown: number;
+      projectilesPerShot: number;
+      spreadAngle: number;
+    };
+    homing: {
+      limit: number;
+      speed: number;
+      maxAmmo: number;
+      ammoRegenRate: number;
+      ammoConsumption: number;
+      shotCooldown: number;
+      trackingStrength: number;
+      trackingRange: number;
+    };
   };
   experienceOrb: {
     baseSpeed: number;
@@ -151,15 +173,15 @@ export interface GameConfig {
 }
 
 export interface WaveConfig {
-  restDuration: number; // seconds between waves
-  baseEnemyCount: number; // starting number of enemies in wave 1
-  enemyScaling: number; // additional enemies per wave
-  spawnDelay: number; // seconds between enemy spawns
+  restDuration: number;
+  baseEnemyCount: number;
+  enemyScaling: number;
+  spawnDelay: number;
   difficultyScaling: {
-    hpMultiplier: number; // HP increase per wave
-    speedMultiplier: number; // Speed increase per wave
+    hpMultiplier: number;
+    speedMultiplier: number;
   };
-  pointsPerKill: number; // Points awarded per enemy kill
+  pointsPerKill: number;
 }
 
 export enum WaveState {
@@ -218,16 +240,80 @@ export interface FontConfig {
   xlarge: number;
 }
 
+export enum ShopEffectType {
+  BULLET_SPEED = 'bullet_speed',
+  FIRE_RATE = 'fire_rate',
+  EXTRA_BULLETS = 'extra_bullets',
+  MOVE_SPEED = 'move_speed',
+  MAX_HEALTH = 'max_health',
+  MAGNET_RANGE = 'magnet_range',
+  WEAPON_SCATTER = 'weapon_scatter',
+  WEAPON_HOMING = 'weapon_homing'
+}
+
+export enum SpacePortIconType {
+  BULLET_SPEED = 'bullet_speed',
+  FIRE_RATE = 'fire_rate',
+  EXTRA_BULLETS = 'extra_bullets',
+  MOVE_SPEED = 'move_speed',
+  MAX_HEALTH = 'max_health',
+  MAGNET_RANGE = 'magnet_range',
+  SCATTER_GUN = 'scatter_gun',
+  HOMING_MISSILE = 'homing_missile'
+}
+
 export interface ShopItem {
   id: string;
   name: string;
   cost: number;
   color: string;
+  effect: ShopEffectType;
+  description?: string;
+  category: 'stat' | 'weapon';
+  iconType: SpacePortIconType;
+  maxPurchases?: number;
+  scalingCost?: number;
 }
 
 export interface ShopConfig {
-  items: ShopItem[];
-  zoneSize: { width: number; height: number };
-  slotSize: number;
-  position: { x: number; y: number };
+  upgradePool: ShopItem[];
+  spacePort: {
+    maxPortsPerRest: number;
+    portSize: { width: number; height: number };
+    positions: Position[];
+  };
+}
+
+export interface PurchasedItem {
+  id: string;
+  name: string;
+  color: string;
+  stackPosition: number;
+}
+
+export interface ParticleEmitConfig {
+  x: number;
+  y: number;
+  count: number;
+  speedMin: number;
+  speedMax: number;
+  lifetimeMin: number;
+  lifetimeMax: number;
+  sizeMin: number;
+  sizeMax: number;
+  color: string;
+  angleMin?: number;
+  angleMax?: number;
+  fadeOut?: boolean;
+}
+
+export interface RenderingConfig {
+  particles: {
+    poolSize: number;
+    engineTrail: { count: number; lifetime: number; speed: number };
+    explosion: { count: number; lifetime: number; speed: number };
+    hitSpark: { count: number; lifetime: number; speed: number };
+    xpCollect: { count: number; lifetime: number; speed: number };
+    projectileTrail: { count: number; lifetime: number };
+  };
 }

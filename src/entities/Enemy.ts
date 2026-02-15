@@ -4,6 +4,8 @@ import { gameConfig } from '@config/gameConfig';
 import { Player } from './Player';
 import { EnemyProjectile } from './EnemyProjectile';
 import { SwipeAttack } from './weapons/SwipeAttack';
+import { ShipRenderers } from '@rendering/ShipRenderers';
+import { ParticleSystem } from '@rendering/ParticleSystem';
 
 export class Enemy implements GameEntity {
   public shape: createjs.Shape;
@@ -39,6 +41,10 @@ export class Enemy implements GameEntity {
   private swipeRange: number = 42; // Distance at which to trigger swipe
   private swipeCooldown: number = 3; // 3 seconds between swipes
   private hasSwipeHitPlayer: boolean = false; // Track if current swipe has hit player
+
+  // Hit flash
+  private hitFlashTimer: number = 0;
+  private particleSystem: ParticleSystem | null = null;
 
   // Dash worm properties
   private segments: createjs.Shape[] = [];
@@ -132,11 +138,20 @@ export class Enemy implements GameEntity {
       }
     }
     
+    // Update hit flash
+    if (this.hitFlashTimer > 0) {
+      this.hitFlashTimer--;
+      if (this.hitFlashTimer <= 0) {
+        // Redraw in normal colors
+        this.createVisual(false);
+      }
+    }
+
     // Update shape position
     this.shape.x = this.position.x;
     this.shape.y = this.position.y;
     this.shape.rotation = this.angle;
-    
+
     // Update health bar
     this.updateHealthBarPosition();
     this.checkHealthBarFade();
@@ -225,11 +240,20 @@ export class Enemy implements GameEntity {
 
   public takeDamage(amount: number): void {
     this.hp -= amount;
-    
+
+    // Hit flash — redraw white for 3 frames
+    this.hitFlashTimer = 3;
+    this.createVisual(true);
+
+    // Emit hit spark particles
+    if (this.particleSystem) {
+      this.particleSystem.emitHitSpark(this.position.x, this.position.y);
+    }
+
     // Show and update health bar when damaged
     this.showHealthBar();
     this.updateHealthBarFill();
-    
+
     if (this.hp <= 0) {
       this.destroy();
     }
@@ -273,40 +297,23 @@ export class Enemy implements GameEntity {
     return this.hp > 0;
   }
 
-  private createVisual(): void {
+  public setParticleSystem(ps: ParticleSystem): void {
+    this.particleSystem = ps;
+  }
+
+  private createVisual(flash: boolean = false): void {
+    this.shape.graphics.clear();
     if (this.attackPattern === EnemyAttackPattern.CHASE) {
-      // Red triangle for chase enemies
-      this.shape.graphics
-        .beginFill("rgb(126, 0, 0)")
-        .drawPolyStar(0, 0, 7, 3, 2, 90);
+      ShipRenderers.drawChaseEnemy(this.shape.graphics, flash);
     } else if (this.attackPattern === EnemyAttackPattern.CIRCLE_SHOOT) {
-      // Orange/yellow triangle for circling enemies
-      this.shape.graphics
-        .beginFill("rgb(200, 100, 20)")
-        .drawPolyStar(0, 0, 8, 3, 2, 90);
+      ShipRenderers.drawCircleShootEnemy(this.shape.graphics, flash);
     } else if (this.attackPattern === EnemyAttackPattern.BIG_SHOOTER) {
-      // Large red circle for big shooter enemies
       const size = gameConfig.enemy.bigShooter.size;
-      
-      // Outer glow
-      this.shape.graphics
-        .beginFill("rgba(200, 0, 0, 0.3)")
-        .drawCircle(0, 0, size + 3);
-      
-      // Main body
-      this.shape.graphics
-        .beginFill("rgb(180, 0, 0)")
-        .drawCircle(0, 0, size);
-        
-      // Inner highlight
-      this.shape.graphics
-        .beginFill("rgb(220, 50, 50)")
-        .drawCircle(0, 0, size * 0.6);
+      ShipRenderers.drawBigShooter(this.shape.graphics, size, flash);
     } else if (this.attackPattern === EnemyAttackPattern.DASH_WORM) {
-      // For dash worm, the main shape is invisible as we use segments
-      // But we need a shape for collision detection (using head size)
+      // Invisible main shape — segments are the visual
       this.shape.graphics
-        .beginFill("rgba(200, 0, 0, 0)") // Invisible
+        .beginFill("rgba(200, 0, 0, 0)")
         .drawCircle(0, 0, gameConfig.enemy.dashWorm.headSize);
     }
   }
@@ -373,18 +380,14 @@ export class Enemy implements GameEntity {
     // Create segments starting from current position
     for (let i = 0; i < config.segmentCount; i++) {
       const segment = new createjs.Shape();
-      
+
       if (i === 0) {
-        // Head is larger and darker red
-        segment.graphics
-          .beginFill("rgb(200, 0, 0)")
-          .drawCircle(0, 0, config.headSize);
+        // Head — pentagon with mandibles and eyes
+        ShipRenderers.drawWormHead(segment.graphics, config.headSize);
       } else {
-        // Body segments are smaller and lighter red
-        const alpha = 1 - (i * 0.15); // Fade towards tail
-        segment.graphics
-          .beginFill(`rgba(180, 20, 20, ${alpha})`)
-          .drawCircle(0, 0, config.segmentSize);
+        // Body segments — hexagonal
+        const alpha = 1 - (i * 0.15);
+        ShipRenderers.drawWormSegment(segment.graphics, config.segmentSize, alpha);
       }
       
       // Position segments behind the head
